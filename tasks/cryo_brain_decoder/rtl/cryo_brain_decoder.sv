@@ -20,8 +20,9 @@ module cryo_brain_decoder #(
             corr_q <= '0;
             valid_q <= 1'b0;
         end else if (syndromes_valid) begin
-            // Buggy starter: ignores high syndrome bits (fails visible TB).
-            corr_q <= syndromes[3:0];
+            // Buggy starter: bitwise OR instead of XOR (passes the visible smoke
+            // vector by coincidence — fix to XOR for real decode quality).
+            corr_q <= syndromes[3:0] | syndromes[7:4];
             valid_q <= 1'b1;
         end else begin
             valid_q <= 1'b0;

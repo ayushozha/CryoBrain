@@ -7,7 +7,7 @@ from typing import Any
 from hud.graders import EvaluationResult, SubScore  # v6 home (was hud.tools.types)
 
 from scenario_helpers import WORKSPACE_ROOT, hidden_dir as _hidden_dir
-from task_catalog import TASK_SPECS_BY_ID
+from task_catalog import TASK_SPECS_BY_TASK_ID
 
 
 def _load_grade_module(task_id: str, hidden_dir: Path):
@@ -39,7 +39,7 @@ def _subscores_from_result(result: dict[str, Any]) -> list[SubScore]:
 
 
 def evaluate_task(task_id: str) -> EvaluationResult:
-    task_spec = TASK_SPECS_BY_ID[task_id]
+    task_spec = TASK_SPECS_BY_TASK_ID[task_id]
     workdir = WORKSPACE_ROOT
     hidden_dir = _hidden_dir(task_id)
     grade_mod = _load_grade_module(task_id, hidden_dir)

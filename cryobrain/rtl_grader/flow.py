@@ -12,6 +12,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+REQUIRED_EDA_TOOLS = ("verilator", "yosys")
+
 
 @dataclass(frozen=True)
 class RtlFlowResult:
@@ -22,10 +24,30 @@ class RtlFlowResult:
     area_estimate: float
     latency_cycles: int
     logs: dict[str, str]
+    tools_available: bool
 
     @property
     def rtl_valid(self) -> bool:
-        return self.sim_passed and self.synth_passed and self.lint_passed
+        return self.tools_available and self.sim_passed and self.synth_passed and self.lint_passed
+
+
+def _oss_cad_candidates() -> list[Path]:
+    home = Path.home()
+    system = platform.system()
+    candidates = [
+        home / "utils" / "oss-cad-suite" / "bin",
+        Path("/opt/homebrew/bin"),
+        Path("C:/oss-cad-suite/bin"),
+        Path("C:/Program Files/oss-cad-suite/bin"),
+    ]
+    if system == "Windows":
+        candidates.extend(
+            [
+                home / "oss-cad-suite" / "bin",
+                Path(os.environ.get("OSS_CAD_SUITE_ROOT", "")) / "bin",
+            ]
+        )
+    return [path for path in candidates if path.is_dir()]
 
 
 def tool_env() -> dict[str, str]:
@@ -35,36 +57,69 @@ def tool_env() -> dict[str, str]:
     env["LC_CTYPE"] = "en_US.UTF-8"
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         env["HOME"] = "/home/agent"
+
+    path_parts: list[str] = []
+    for candidate in _oss_cad_candidates():
+        path_parts.append(str(candidate))
     if platform.system() == "Darwin":
-        path_parts = []
-        for candidate in [Path("/opt/homebrew/bin"), Path.home() / "utils" / "oss-cad-suite" / "bin"]:
-            if candidate.is_dir():
-                path_parts.append(str(candidate))
-        path_parts.extend(["/usr/bin", "/bin", "/usr/sbin", "/sbin", env.get("PATH", "")])
-        env["PATH"] = ":".join(part for part in path_parts if part)
-    else:
-        oss_bin = Path.home() / "utils" / "oss-cad-suite" / "bin"
-        if oss_bin.is_dir():
-            env["PATH"] = f"{oss_bin}{os.pathsep}{env.get('PATH', '')}"
+        path_parts.extend(["/usr/bin", "/bin", "/usr/sbin", "/sbin"])
+    path_parts.append(env.get("PATH", ""))
+    separator = ";" if platform.system() == "Windows" else ":"
+    env["PATH"] = separator.join(part for part in path_parts if part)
     return env
 
 
+def resolve_eda_tool(name: str) -> str | None:
+    """Return an executable path for an EDA tool, probing OSS CAD Suite paths."""
+    found = shutil.which(name, path=tool_env().get("PATH"))
+    if found:
+        return found
+    suffix = ".exe" if platform.system() == "Windows" else ""
+    for candidate_dir in _oss_cad_candidates():
+        candidate = candidate_dir / f"{name}{suffix}"
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def missing_eda_tools() -> list[str]:
+    return [tool for tool in REQUIRED_EDA_TOOLS if resolve_eda_tool(tool) is None]
+
+
+def eda_tools_available() -> bool:
+    return not missing_eda_tools()
+
+
+def _tool_missing_log(tool: str) -> str:
+    searched = ", ".join(str(path) for path in _oss_cad_candidates()) or "(no OSS CAD paths found)"
+    return (
+        f"EDA tool '{tool}' not found on PATH. "
+        f"Install OSS CAD Suite and add its bin directory to PATH, or set OSS_CAD_SUITE_ROOT. "
+        f"Searched: {searched}"
+    )
+
+
 def run_cmd(args: list[str], *, cwd: Path, timeout: int = 120) -> subprocess.CompletedProcess[str]:
+    executable = args[0]
+    if resolve_eda_tool(executable) is None and executable in REQUIRED_EDA_TOOLS:
+        return subprocess.CompletedProcess(args, 127, _tool_missing_log(executable), None)
+    resolved = resolve_eda_tool(executable) or executable
+    cmd = [resolved, *args[1:]]
     try:
         proc = subprocess.Popen(
-            args,
+            cmd,
             cwd=cwd,
             env=tool_env(),
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            start_new_session=True,
+            start_new_session=platform.system() != "Windows",
         )
     except FileNotFoundError as exc:
-        return subprocess.CompletedProcess(args, 127, f"missing executable: {args[0]} ({exc})", None)
+        return subprocess.CompletedProcess(cmd, 127, f"missing executable: {executable} ({exc})", None)
     try:
         stdout, _ = proc.communicate(timeout=timeout)
-        return subprocess.CompletedProcess(args, proc.returncode, stdout, None)
+        return subprocess.CompletedProcess(cmd, proc.returncode, stdout, None)
     except subprocess.TimeoutExpired:
         if hasattr(os, "killpg"):
             try:
@@ -73,7 +128,7 @@ def run_cmd(args: list[str], *, cwd: Path, timeout: int = 120) -> subprocess.Com
                 pass
         else:
             proc.kill()
-        return subprocess.CompletedProcess(args, -9, f"timed out after {timeout}s", None)
+        return subprocess.CompletedProcess(cmd, -9, f"timed out after {timeout}s", None)
 
 
 def _parse_cell_count(proc_json: Path) -> int:
@@ -93,6 +148,28 @@ def run_rtl_flow(workdir: Path, *, golden_mode: bool = False) -> RtlFlowResult:
     report_dir = workdir / "reports"
     build_dir.mkdir(parents=True, exist_ok=True)
     report_dir.mkdir(parents=True, exist_ok=True)
+
+    missing = missing_eda_tools()
+    tools_available = not missing
+    if missing:
+        banner = (
+            "RTL flow skipped: required EDA tools are unavailable "
+            f"({', '.join(missing)}). Reward validity gate will fail until "
+            "verilator and yosys are installed."
+        )
+        for tool in missing:
+            logs[tool] = _tool_missing_log(tool)
+        logs["summary"] = banner
+        return RtlFlowResult(
+            sim_passed=False,
+            synth_passed=False,
+            lint_passed=False,
+            cell_count=0,
+            area_estimate=0.0,
+            latency_cycles=12,
+            logs=logs,
+            tools_available=False,
+        )
 
     lint = run_cmd(
         ["verilator", "--lint-only", "-Wall", "-Wno-fatal", "--top-module", "cryo_brain_decoder", str(rtl)],
@@ -123,7 +200,10 @@ def run_rtl_flow(workdir: Path, *, golden_mode: bool = False) -> RtlFlowResult:
         )
         logs["verilate"] = sim.stdout or ""
         if sim.returncode == 0:
-            run_bin = run_cmd([str(build_dir / "obj_visible" / "cryo_brain_decoder_visible")], cwd=workdir)
+            sim_bin = build_dir / "obj_visible" / "cryo_brain_decoder_visible"
+            if platform.system() == "Windows" and not sim_bin.exists():
+                sim_bin = sim_bin.with_suffix(".exe")
+            run_bin = run_cmd([str(sim_bin)], cwd=workdir)
             logs["sim"] = run_bin.stdout or ""
             scenario_re = re.compile(r"^SCENARIO\s+(?P<name>\S+)\s+(?P<status>PASS|FAIL)")
             sim_passed = run_bin.returncode == 0 and any(
@@ -152,4 +232,5 @@ def run_rtl_flow(workdir: Path, *, golden_mode: bool = False) -> RtlFlowResult:
         area_estimate=area_estimate,
         latency_cycles=latency_cycles,
         logs=logs,
+        tools_available=True,
     )

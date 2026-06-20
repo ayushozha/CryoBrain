@@ -13,7 +13,7 @@ from hud.environment import Workspace
 
 from grader import evaluate_task
 from scenario_helpers import WORKSPACE_ROOT, setup_task, write_scenario_files
-from task_catalog import TASK_SPECS_BY_ID
+from task_catalog import TASK_SPECS_BY_SLUG
 
 AGENT_UID = int(os.environ.get("AGENT_UID", "1000"))
 AGENT_GID = int(os.environ.get("AGENT_GID", "1000"))
@@ -67,6 +67,7 @@ async def get_observation() -> str:
 @env.tool()
 async def run_eval_preview() -> str:
     """Run a lightweight local preview of lint/sim (agent-visible only; hidden grader is authoritative)."""
+    global _last_observation
     from cryobrain.rtl_grader.flow import run_rtl_flow
 
     result = run_rtl_flow(WORKSPACE_ROOT)
@@ -75,12 +76,16 @@ async def run_eval_preview() -> str:
         "synth_passed": result.synth_passed,
         "lint_passed": result.lint_passed,
         "cell_count": result.cell_count,
+        "area_estimate": result.area_estimate,
+        "latency_cycles": result.latency_cycles,
     }
+    _last_observation = {**_last_observation, "last_preview": payload}
     return json.dumps(payload, indent=2)
 
 
 @env.template(id="cryo_task")
 async def cryo_task(
+    slug: str,
     task_id: str,
     distance: int = 3,
     noise_rate: float = 0.001,
@@ -91,6 +96,7 @@ async def cryo_task(
 ):
     """CryoBrain decoder co-design with curriculum-bound distance/noise/budget."""
     global _last_observation
+    task_spec = TASK_SPECS_BY_SLUG[slug]
     setup_meta = setup_task(
         task_id,
         validate_mode=validate_mode,
@@ -103,7 +109,10 @@ async def cryo_task(
         },
     )
     _last_observation = {
+        "slug": slug,
         "task_id": task_id,
+        "track": task_spec.track,
+        "variant": task_spec.variant,
         "distance": distance,
         "noise_rate": noise_rate,
         "budget": {
@@ -112,8 +121,9 @@ async def cryo_task(
             "max_power_mw": max_power_mw,
         },
         "workdir": setup_meta.get("workdir"),
+        "last_preview": None,
     }
-    answer = yield TASK_SPECS_BY_ID[task_id].prompt
+    answer = yield task_spec.prompt
     evaluation = evaluate_task(task_id)
     info = dict(evaluation.info or {})
     info["setup"] = setup_meta
@@ -124,10 +134,11 @@ async def cryo_task(
 
 
 @env.template(id="verilog_task")
-async def verilog_task(task_id: str, validate_mode: str | None = None):
+async def verilog_task(slug: str, task_id: str, validate_mode: str | None = None):
     """Classical FIFO fallback tasks (CP7)."""
+    task_spec = TASK_SPECS_BY_SLUG[slug]
     setup_meta = setup_task(task_id, validate_mode=validate_mode)
-    answer = yield TASK_SPECS_BY_ID[task_id].prompt
+    answer = yield task_spec.prompt
     evaluation = evaluate_task(task_id)
     info = dict(evaluation.info or {})
     info["setup"] = setup_meta

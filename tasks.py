@@ -7,17 +7,18 @@ tasks = []
 
 for _spec in TASK_SPECS:
     if _spec.template == "cryo_task":
-        _curriculum = CRYO_CURRICULUM.get(_spec.slug, {})
+        _curriculum = CRYO_CURRICULUM[_spec.slug]
         _task = cryo_task(
+            slug=_spec.slug,
             task_id=_spec.task_id,
-            distance=_curriculum.get("distance", 3),
-            noise_rate=_curriculum.get("noise_rate", 0.001),
-            max_latency_cycles=_curriculum.get("max_latency_cycles", 64),
-            max_area_mm2=_curriculum.get("max_area_mm2", 0.06),
-            max_power_mw=_curriculum.get("max_power_mw", 8.0),
+            distance=_curriculum["distance"],
+            noise_rate=_curriculum["noise_rate"],
+            max_latency_cycles=_curriculum["max_latency_cycles"],
+            max_area_mm2=_curriculum["max_area_mm2"],
+            max_power_mw=_curriculum["max_power_mw"],
         )
     else:
-        _task = verilog_task(task_id=_spec.task_id)
+        _task = verilog_task(slug=_spec.slug, task_id=_spec.task_id)
 
     _task.slug = _spec.slug
     _task.columns = {

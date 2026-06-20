@@ -31,6 +31,19 @@ def main() -> int:
             ok = False
             continue
         print(f"{name}: {_version(cmd)}")
+
+    # HUD surface must import cleanly (catalog + env wiring).
+    try:
+        import env  # noqa: F401
+        import task_catalog
+        import tasks
+
+        print(f"task_catalog: {len(task_catalog.TASK_SPECS)} eval slugs")
+        print(f"tasks.py: {len(tasks.tasks)} bound scenarios")
+    except Exception as exc:  # noqa: BLE001
+        print(f"hud_surface: import failed ({type(exc).__name__}: {exc})")
+        ok = False
+
     return 0 if ok else 1
 
 

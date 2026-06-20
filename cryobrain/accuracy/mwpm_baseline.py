@@ -11,6 +11,8 @@ def decode_with_mwpm(circuit: stim.Circuit, detector_shots: np.ndarray) -> np.nd
     """Decode detector shots with PyMatching; return observable flip predictions."""
     matcher = pymatching.Matching.from_stim_circuit(circuit)
     shots = np.asarray(detector_shots, dtype=np.uint8)
+    if shots.ndim != 2:
+        raise ValueError(f"detector_shots must be 2-D (shots, detectors); got shape {shots.shape}")
     return matcher.decode_batch(shots)
 
 

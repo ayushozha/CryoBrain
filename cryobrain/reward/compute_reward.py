@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from cryobrain.cost_model.npu_cost import (
     HardwareMetrics,
     area_score,
+    estimate_hardware_metrics,
     latency_score,
     meets_cryo_budget,
 )
-from cryobrain.types import CryoBudget
+from cryobrain.types import CryoBudget, DesignConfig, ScenarioConfig
 
 
 @dataclass(frozen=True)
@@ -93,3 +94,39 @@ def compute_reward(
         area_component=area,
         hard_caps=hard_caps,
     )
+
+
+def compute_reward_from_scenario(
+    *,
+    rtl_valid: bool,
+    design: DesignConfig,
+    scenario: ScenarioConfig,
+    budget: CryoBudget,
+    latency_cycles: int | None = None,
+    area_mm2: float | None = None,
+    w_acc: float = 0.7,
+    w_lat: float = 0.15,
+    w_area: float = 0.15,
+) -> tuple[RewardBreakdown, dict[str, float]]:
+    """End-to-end reward: Stim MWPM anchor + policy candidate + hardware model."""
+    from cryobrain.accuracy.stim_harness import evaluate_accuracy
+
+    accuracy = evaluate_accuracy(scenario, design, rtl_valid=rtl_valid)
+    base_metrics = estimate_hardware_metrics(design)
+    metrics = HardwareMetrics(
+        mac_count=base_metrics.mac_count,
+        area_mm2=area_mm2 if area_mm2 is not None else base_metrics.area_mm2,
+        latency_cycles=latency_cycles if latency_cycles is not None else base_metrics.latency_cycles,
+        power_mw=base_metrics.power_mw,
+    )
+    breakdown = compute_reward(
+        rtl_valid=rtl_valid,
+        metrics=metrics,
+        budget=budget,
+        candidate_ler=float(accuracy["candidate_ler"]),
+        mwpm_ler=float(accuracy["mwpm_ler"]),
+        w_acc=w_acc,
+        w_lat=w_lat,
+        w_area=w_area,
+    )
+    return breakdown, accuracy

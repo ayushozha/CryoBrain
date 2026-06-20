@@ -11,8 +11,11 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE = ROOT.parents[1]
 HIDDEN = ROOT / "donotaccess"
-REQUIRED_TOOLS = ("verilator", "yosys")
+
+if str(WORKSPACE) not in sys.path:
+    sys.path.insert(0, str(WORKSPACE))
 
 
 def _load_grade():
@@ -38,9 +41,25 @@ def _stage_baseline() -> Path:
 
 
 def main() -> int:
-    missing_tools = [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
-    if missing_tools:
-        print(json.dumps({"ok": False, "missing_tools": missing_tools}, indent=2))
+    from cryobrain.rtl_grader.flow import eda_tools_available, missing_eda_tools
+
+    if not eda_tools_available():
+        missing = missing_eda_tools()
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "skipped": True,
+                    "reason": "EDA tools not on PATH",
+                    "missing_tools": missing,
+                    "hint": (
+                        "Install OSS CAD Suite (verilator + yosys) and add its bin directory to PATH, "
+                        "or set OSS_CAD_SUITE_ROOT. On Windows, WSL/Linux is the supported local path."
+                    ),
+                },
+                indent=2,
+            )
+        )
         return 1
 
     grade_mod = _load_grade()
@@ -54,8 +73,17 @@ def main() -> int:
         "wrong": wrong["reward"],
         "starter": starter["reward"],
         "golden": golden["reward"],
+        "details": {
+            "wrong_caps": wrong.get("hard_caps"),
+            "starter_caps": starter.get("hard_caps"),
+            "golden_caps": golden.get("hard_caps"),
+        },
     }
-    summary["ok"] = summary["wrong"] == 0.0 and 0.15 <= summary["starter"] <= 0.55 and summary["golden"] >= 0.6
+    summary["ok"] = (
+        summary["wrong"] == 0.0
+        and 0.20 <= summary["starter"] <= 0.50
+        and summary["golden"] >= 0.60
+    )
     print(json.dumps(summary, indent=2))
 
     return 0 if summary["ok"] else 1

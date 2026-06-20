@@ -105,12 +105,49 @@ TASK_SPECS = [
     STREAM_ARB_FIFO_COCOTB_DV,
     STREAM_ARB_FIFO_FORMAL,
 ]
-TASK_SPECS_BY_ID = {spec.task_id: spec for spec in TASK_SPECS}
+
+# HUD eval binds by slug (6 curriculum/fallback variants). On-disk graders share task_id.
 TASK_SPECS_BY_SLUG = {spec.slug: spec for spec in TASK_SPECS}
+
+# One metadata row per filesystem task directory (4 on-disk tasks).
+TASK_SPECS_BY_TASK_ID: dict[str, TaskSpec] = {}
+for _spec in TASK_SPECS:
+    TASK_SPECS_BY_TASK_ID.setdefault(_spec.task_id, _spec)
+
+# Back-compat alias used by grader/setup (filesystem task_id, not eval slug).
+TASK_SPECS_BY_ID = TASK_SPECS_BY_TASK_ID
 
 # RSI distance curriculum bindings (SPEC F7 / CP6)
 CRYO_CURRICULUM = {
-    "cryo-brain-decoder-d3": {"distance": 3, "noise_rate": 0.001, "max_latency_cycles": 64, "max_area_mm2": 0.06, "max_power_mw": 8.0},
-    "cryo-brain-decoder-d5": {"distance": 5, "noise_rate": 0.002, "max_latency_cycles": 96, "max_area_mm2": 0.08, "max_power_mw": 10.0},
-    "cryo-brain-decoder-d7": {"distance": 7, "noise_rate": 0.003, "max_latency_cycles": 128, "max_area_mm2": 0.10, "max_power_mw": 12.0},
+    "cryo-brain-decoder-d3": {
+        "distance": 3,
+        "noise_rate": 0.001,
+        "max_latency_cycles": 64,
+        "max_area_mm2": 0.06,
+        "max_power_mw": 8.0,
+    },
+    "cryo-brain-decoder-d5": {
+        "distance": 5,
+        "noise_rate": 0.002,
+        "max_latency_cycles": 96,
+        "max_area_mm2": 0.08,
+        "max_power_mw": 10.0,
+    },
+    "cryo-brain-decoder-d7": {
+        "distance": 7,
+        "noise_rate": 0.003,
+        "max_latency_cycles": 128,
+        "max_area_mm2": 0.10,
+        "max_power_mw": 12.0,
+    },
 }
+
+CRYO_SLUGS = tuple(CRYO_CURRICULUM)
+FALLBACK_SLUGS = tuple(
+    spec.slug for spec in TASK_SPECS if spec.track.startswith("fallback")
+)
+
+
+def curriculum_for_slug(slug: str) -> dict[str, float | int]:
+    """Return RSI distance/noise/budget knobs for a cryo eval slug."""
+    return dict(CRYO_CURRICULUM[slug])

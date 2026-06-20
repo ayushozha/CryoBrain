@@ -34,7 +34,8 @@ def estimate_hardware_metrics(
     weight_bits = mac_count * design.bitwidth
     area_mm2 = mac_count * design.bitwidth * calibrated_area_per_mac + weight_bits * 2e-7
     latency_cycles = max(1, design.pipeline_depth // max(design.parallelism, 1))
-    power_mw = 0.01 * mac_count * design.bitwidth
+    # Calibrated so default starter config sits ~60% of the 8 mW Riverlane anchor.
+    power_mw = 0.00488 * mac_count * design.bitwidth / max(design.parallelism, 1)
     return HardwareMetrics(
         mac_count=mac_count,
         area_mm2=area_mm2,

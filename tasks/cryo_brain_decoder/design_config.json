@@ -1,6 +1,6 @@
 {
   "bitwidth": 4,
-  "num_layers": 2,
+  "num_layers": 1,
   "parallelism": 1,
   "pipeline_depth": 4,
   "window_length": 8
