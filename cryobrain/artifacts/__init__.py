@@ -1,0 +1,1 @@
+"""Demo artifacts: Pareto plots and climb charts."""

@@ -1,0 +1,46 @@
+[project]
+name = "cryobrain"
+version = "0.1.0"
+description = "CryoBrain — RL environment for neural QEC decoder co-design (HUD v6)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "cocotb==2.0.1",
+    "cocotb-bus==0.3.0",
+    "cocotb-coverage==2.0",
+    "hud-python[agents]>=0.6.5",
+    "hypothesis==6.152.7",
+    "matplotlib>=3.8",
+    "numpy>=1.26",
+    "pydantic>=2.0.0",
+    "pymatching>=2.0",
+    "pyuvm==4.0.1",
+    "stim>=1.14",
+]
+
+[project.optional-dependencies]
+rl = ["modal>=0.67"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = [
+    "env.py",
+    "tasks.py",
+    "task_catalog.py",
+    "grader.py",
+    "scenario_helpers.py",
+    "cryobrain",
+    "tasks",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
