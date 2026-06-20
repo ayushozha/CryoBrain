@@ -1,6 +1,6 @@
-"""Modal RL co-design loop (SPEC F6, CP4).
+"""Modal dispatch for the CP4 real graded training loop (SPEC F6, CP4).
 
-Kick off locally (stub) or on Modal when credentials are configured:
+Commands:
 
     uv run --extra rl python -m cryobrain.rl.modal_train --steps 50
     uv run python scripts/run_rl.py --steps 50
@@ -20,7 +20,7 @@ APP_NAME = "cryobrain-rl-co-design"
 
 
 def _build_modal_app():
-    """Construct Modal app — returns (app, train_remote) or raises ImportError."""
+    """Construct the optional Modal app, or raise ImportError if Modal is unavailable."""
     import modal
 
     image = (
@@ -43,7 +43,6 @@ def _build_modal_app():
         secrets=[modal.Secret.from_name("cryobrain-modal", required=False)],
     )
     def train_remote(config_dict: dict[str, object]) -> dict[str, object]:
-        """GPU-side training — falls back to local stub inside the container."""
         from cryobrain.rl.config import TrainConfig as TC
         from cryobrain.rl.local_trainer import run_local_training as run_train
 
@@ -56,7 +55,7 @@ def _build_modal_app():
 
 
 def run_training(config: TrainConfig, *, force_local: bool = False) -> dict[str, object]:
-    """Dispatch to Modal when available, otherwise local stub."""
+    """Dispatch to Modal when configured, otherwise run the real local grader loop."""
     if force_local or os.environ.get("CRYOBRAIN_FORCE_LOCAL", "").lower() in {"1", "true", "yes"}:
         return run_local_training(config)
 
@@ -69,26 +68,26 @@ def run_training(config: TrainConfig, *, force_local: bool = False) -> dict[str,
     token_secret = os.environ.get("MODAL_TOKEN_SECRET")
     if not (token_id and token_secret):
         result = run_local_training(config)
-        result["note"] = "Modal package present but MODAL_TOKEN_ID/SECRET unset; used local stub"
+        result["note"] = "Modal package present but MODAL_TOKEN_ID/SECRET unset; used real local graded training"
         return result
 
     try:
         _, train_remote = _build_modal_app()
         return train_remote.remote(config.to_dict())
-    except Exception as exc:  # pragma: no cover — network/credential failures
+    except Exception as exc:  # pragma: no cover - network/credential failures
         result = run_local_training(config)
-        result["note"] = f"Modal dispatch failed ({exc}); used local stub"
+        result["note"] = f"Modal dispatch failed ({exc}); used real local graded training"
         return result
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="CryoBrain RL training launcher (F6/F7)")
-    parser.add_argument("--steps", type=int, default=50, help="Total RL optimization steps")
+    parser.add_argument("--steps", type=int, default=50, help="Total optimization steps")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", type=Path, default=Path("artifacts/climb_chart.json"))
     parser.add_argument("--designs-output", type=Path, default=Path("artifacts/designs.json"))
     parser.add_argument("--config", type=Path, help="Optional JSON TrainConfig override")
-    parser.add_argument("--local", action="store_true", help="Force local stub (skip Modal)")
+    parser.add_argument("--local", action="store_true", help="Force real local training instead of Modal")
     args = parser.parse_args()
 
     if args.config and args.config.is_file():

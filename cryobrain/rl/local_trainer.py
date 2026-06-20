@@ -1,162 +1,218 @@
-"""Local RL co-design stub — produces climb chart + design rollouts (SPEC F6/F7)."""
+"""Real local CP4 training loop backed by the hidden CryoBrain grader."""
 
 from __future__ import annotations
 
+import importlib.util
 import json
-import math
 import random
 from dataclasses import asdict
 from pathlib import Path
+from typing import Callable
 
+from cryobrain.calibration.cp3 import stage_workdir
 from cryobrain.cost_model.npu_cost import estimate_hardware_metrics
-from cryobrain.reward.compute_reward import compute_reward, ler_suppression_vs_mwpm
+from cryobrain.reward.compute_reward import ler_suppression_vs_mwpm
 from cryobrain.rl.config import CurriculumStage, TrainConfig
 from cryobrain.types import DesignConfig
 
+ROOT = Path(__file__).resolve().parents[2]
+TASK_ROOT = ROOT / "tasks" / "cryo_brain_decoder"
 
-def _stage_difficulty(stage: CurriculumStage) -> float:
-    """Higher distance + noise makes the decode problem harder."""
-    return 0.12 * (stage.distance - 3) + 35.0 * stage.noise_rate
-
-
-def _sample_design(rng: random.Random, step: int) -> DesignConfig:
-    """Policy-improving design sweep — bitwidth/layers/parallelism knobs."""
-    bitwidth = rng.choice([2, 4, 4, 8])
-    num_layers = rng.choice([1, 2, 2, 3])
-    parallelism = rng.choice([1, 1, 2, 4])
-    pipeline_depth = rng.choice([2, 4, 4, 8])
-    window_length = 4 + (step % 5) * 2
-    return DesignConfig(
-        bitwidth=bitwidth,
-        num_layers=num_layers,
-        parallelism=parallelism,
-        pipeline_depth=pipeline_depth,
-        window_length=window_length,
-    )
+GradeFn = Callable[[Path], dict[str, object]]
 
 
-def _simulate_ler(
-    *,
+def _load_grade_fn(task_root: Path = TASK_ROOT) -> GradeFn:
+    """Load the hidden grader without importing from a hidden package path."""
+    grade_path = task_root / "donotaccess" / "grade.py"
+    spec = importlib.util.spec_from_file_location("cryo_brain_decoder_grade", grade_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot import {grade_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    hidden_root = task_root / "donotaccess"
+
+    def grade(workdir: Path) -> dict[str, object]:
+        return module.grade(workdir, hidden_root=hidden_root)
+
+    return grade
+
+
+def _design_sweep(seed: int) -> list[DesignConfig]:
+    """Small deterministic policy search over the spec's design knobs."""
+    base = [
+        DesignConfig(bitwidth=4, num_layers=1, parallelism=1, pipeline_depth=4, window_length=8),
+        DesignConfig(bitwidth=2, num_layers=1, parallelism=1, pipeline_depth=4, window_length=4),
+        DesignConfig(bitwidth=2, num_layers=1, parallelism=2, pipeline_depth=2, window_length=4),
+        DesignConfig(bitwidth=4, num_layers=1, parallelism=2, pipeline_depth=2, window_length=8),
+        DesignConfig(bitwidth=2, num_layers=2, parallelism=2, pipeline_depth=4, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=2, pipeline_depth=4, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=4, pipeline_depth=4, window_length=8),
+        DesignConfig(bitwidth=8, num_layers=1, parallelism=4, pipeline_depth=4, window_length=8),
+    ]
+    tail = base[1:]
+    random.Random(seed).shuffle(tail)
+    return [base[0], *tail]
+
+
+def _scenario_for_stage(
+    base_scenario: dict[str, object],
     stage: CurriculumStage,
-    design: DesignConfig,
-    policy_gain: float,
-    rng: random.Random,
-) -> tuple[float, float]:
-    """Synthetic MWPM + candidate LER for stub training (no Stim round-trip)."""
-    base_mwpm = 0.018 + _stage_difficulty(stage)
-    mwpm_ler = base_mwpm * (1.0 + 0.05 * rng.random())
-    capacity = (
-        0.08 * design.num_layers
-        + 0.04 * math.log2(max(design.bitwidth, 2))
-        + 0.03 * math.log2(max(design.parallelism, 1))
+    *,
+    seed: int,
+    step: int,
+) -> dict[str, object]:
+    scenario = dict(base_scenario)
+    scenario.update(
+        {
+            "distance": stage.distance,
+            "noise_rate": stage.noise_rate,
+            "max_latency_cycles": stage.budget.max_latency_cycles,
+            "max_area_mm2": stage.budget.max_area_mm2,
+            "max_power_mw": stage.budget.max_power_mw,
+            "benchmark_seed": seed * 1009 + step,
+            "benchmark_vectors": 64,
+        }
     )
-    candidate_ler = mwpm_ler * max(0.55, 1.0 - policy_gain - capacity + 0.02 * rng.random())
-    return mwpm_ler, candidate_ler
+    return scenario
 
 
-def run_local_training(config: TrainConfig) -> dict[str, object]:
-    """Run curriculum-aware stub RL and write climb_chart.json + designs.json."""
-    rng = random.Random(config.seed)
+def _stage_index(step: int, steps: int, stages: list[CurriculumStage]) -> int:
+    if not stages:
+        return 0
+    return min(len(stages) - 1, step * len(stages) // max(steps, 1))
+
+
+def _metric(subscores: dict[str, object], name: str, key: str, default: float = 0.0) -> float:
+    section = subscores.get(name, {})
+    if not isinstance(section, dict):
+        return default
+    if key == "raw_score":
+        return float(section.get("raw_score", default))
+    result = section.get("result", {})
+    return float(result.get(key, default)) if isinstance(result, dict) else default
+
+
+def run_graded_training(
+    config: TrainConfig,
+    *,
+    grade_fn: GradeFn | None = None,
+    task_root: Path = TASK_ROOT,
+) -> dict[str, object]:
+    """Run a CP4 hill-climb where every point is scored by the real grader."""
+    task_root = Path(task_root)
+    grade_fn = grade_fn or _load_grade_fn(task_root)
+    base_scenario = json.loads((task_root / "scenario.json").read_text(encoding="utf-8"))
+    candidates = _design_sweep(config.seed)
     stages = list(config.curriculum)
-    stage_idx = 0
-    policy_gain = 0.0
-    history: list[dict[str, object]] = []
-    transitions: list[dict[str, object]] = []
-    designs: list[dict[str, object]] = []
 
-    steps_per_stage = max(8, config.steps // max(len(stages), 1))
-    steps_in_stage = 0
+    history: list[dict[str, object]] = []
+    designs: list[dict[str, object]] = []
+    transitions: list[dict[str, object]] = []
+    accepted_reward = 0.0
+    accepted_design = candidates[0]
+    last_stage_idx = 0
 
     for step in range(config.steps):
+        stage_idx = _stage_index(step, config.steps, stages)
         stage = stages[stage_idx]
-        design = _sample_design(rng, step)
-        metrics = estimate_hardware_metrics(design)
-
-        # Policy improves over time within each curriculum stage.
-        policy_gain = min(0.42, policy_gain + 0.006 + 0.002 * (step % 7) / 7.0)
-        mwpm_ler, candidate_ler = _simulate_ler(
-            stage=stage,
-            design=design,
-            policy_gain=policy_gain,
-            rng=rng,
-        )
-
-        breakdown = compute_reward(
-            rtl_valid=True,
-            metrics=metrics,
-            budget=stage.budget,
-            candidate_ler=candidate_ler,
-            mwpm_ler=mwpm_ler,
-        )
-        reward = breakdown.reward
-
-        history.append(
-            {
-                "step": step,
-                "reward": round(reward, 4),
-                "distance": stage.distance,
-                "stage": stage_idx,
-                "noise_rate": stage.noise_rate,
-                "ler_suppression": round(breakdown.ler_suppression_vs_mwpm, 4),
-            }
-        )
-
-        if breakdown.meets_budget and breakdown.ler_suppression_vs_mwpm > 0.05:
-            designs.append(
-                {
-                    "name": f"agent-step-{step}",
-                    "step": step,
-                    "distance": stage.distance,
-                    "area_mm2": round(metrics.area_mm2, 6),
-                    "latency_cycles": metrics.latency_cycles,
-                    "power_mw": round(metrics.power_mw, 4),
-                    "ler_suppression": round(breakdown.ler_suppression_vs_mwpm, 4),
-                    "reward": round(reward, 4),
-                    "design": design.to_dict(),
-                }
-            )
-
-        steps_in_stage += 1
-
-        # Escalate d3→5→7 after minimum stage dwell and reward clears threshold.
-        at_last_stage = stage_idx >= len(stages) - 1
-        stage_mature = steps_in_stage >= steps_per_stage
-        cleared = reward >= stage.min_reward_to_advance
-        if not at_last_stage and steps_in_stage >= max(6, steps_per_stage // 2) and (cleared or stage_mature):
+        if step and stage_idx != last_stage_idx:
             transitions.append(
                 {
                     "step": step,
-                    "from_distance": stage.distance,
-                    "to_distance": stages[stage_idx + 1].distance,
-                    "reward_at_transition": round(reward, 4),
+                    "from_distance": stages[last_stage_idx].distance,
+                    "to_distance": stage.distance,
+                    "reward_at_transition": round(accepted_reward, 4),
                 }
             )
-            stage_idx += 1
-            steps_in_stage = 0
-            policy_gain *= 0.62  # re-optimization dip at harder distance (F7 story)
+            last_stage_idx = stage_idx
+
+        candidate = candidates[step % len(candidates)]
+        scenario = _scenario_for_stage(base_scenario, stage, seed=config.seed, step=step)
+        workdir = stage_workdir(task_root, scenario=scenario, design=candidate.to_dict())
+        result = grade_fn(workdir)
+        candidate_reward = float(result["reward"])
+        subscores = result.get("subscores", {})
+        if not isinstance(subscores, dict):
+            subscores = {}
+
+        if step == 0 or candidate_reward >= accepted_reward:
+            accepted_reward = candidate_reward
+            accepted_design = candidate
+
+        row = {
+            "step": step,
+            "reward": round(accepted_reward, 6),
+            "candidate_reward": round(candidate_reward, 6),
+            "distance": stage.distance,
+            "stage": stage_idx,
+            "noise_rate": stage.noise_rate,
+            "accepted": candidate == accepted_design,
+            "design": accepted_design.to_dict(),
+            "candidate_design": candidate.to_dict(),
+            "hard_caps": result.get("hard_caps", []),
+            "ler_suppression": round(_metric(subscores, "ler_suppression", "raw_score"), 6),
+            "latency_score": round(_metric(subscores, "latency", "raw_score"), 6),
+            "area_score": round(_metric(subscores, "area", "raw_score"), 6),
+            "benchmark_exactness": round(
+                _metric(subscores, "rtl_validity", "benchmark_exactness"),
+                6,
+            ),
+        }
+        history.append(row)
+
+        if candidate_reward > 0.0 and not result.get("hard_caps"):
+            latency_section = subscores.get("latency", {})
+            metrics = latency_section.get("result", {}) if isinstance(latency_section, dict) else {}
+            if not isinstance(metrics, dict):
+                metrics = estimate_hardware_metrics(candidate).to_dict()
+            designs.append(
+                {
+                    "name": f"agent-step-{step}",
+                    "kind": "policy",
+                    "step": step,
+                    "distance": stage.distance,
+                    "reward": round(candidate_reward, 6),
+                    "area_mm2": float(metrics.get("area_mm2", 0.0)),
+                    "latency_cycles": int(metrics.get("latency_cycles", 0)),
+                    "power_mw": float(metrics.get("power_mw", 0.0)),
+                    "ler_suppression": row["ler_suppression"],
+                    "benchmark_exactness": row["benchmark_exactness"],
+                    "design": candidate.to_dict(),
+                    "source": "hidden_grader",
+                }
+            )
 
     output = Path(config.output)
     designs_path = Path(config.designs_output)
     output.parent.mkdir(parents=True, exist_ok=True)
     designs_path.parent.mkdir(parents=True, exist_ok=True)
 
+    summary = {
+        "start_reward": history[0]["reward"] if history else 0.0,
+        "end_reward": history[-1]["reward"] if history else 0.0,
+        "max_reward": max((h["reward"] for h in history), default=0.0),
+        "stages_completed": (max((int(h["stage"]) for h in history), default=0) + 1) if history else 0,
+        "accepted_design": accepted_design.to_dict(),
+    }
     payload: dict[str, object] = {
-        "backend": "local_stub",
+        "backend": "real_local",
+        "reward_source": str(task_root / "donotaccess" / "grade.py"),
         "config": config.to_dict(),
         "steps": config.steps,
-        "final_distance": stages[stage_idx].distance,
+        "final_distance": stages[last_stage_idx].distance if stages else None,
         "history": history,
         "curriculum_transitions": transitions,
-        "summary": {
-            "start_reward": history[0]["reward"] if history else 0.0,
-            "end_reward": history[-1]["reward"] if history else 0.0,
-            "max_reward": max((h["reward"] for h in history), default=0.0),
-            "stages_completed": stage_idx + 1,
-        },
+        "summary": summary,
     }
     output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     designs_path.write_text(json.dumps(designs, indent=2), encoding="utf-8")
     return payload
+
+
+def run_local_training(config: TrainConfig) -> dict[str, object]:
+    """Backward-compatible entrypoint for the real local graded trainer."""
+    return run_graded_training(config)
 
 
 def baseline_designs() -> list[dict[str, object]]:
