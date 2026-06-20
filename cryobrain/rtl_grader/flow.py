@@ -45,28 +45,34 @@ def tool_env() -> dict[str, str]:
     else:
         oss_bin = Path.home() / "utils" / "oss-cad-suite" / "bin"
         if oss_bin.is_dir():
-            env["PATH"] = f"{oss_bin}:{env.get('PATH', '')}"
+            env["PATH"] = f"{oss_bin}{os.pathsep}{env.get('PATH', '')}"
     return env
 
 
 def run_cmd(args: list[str], *, cwd: Path, timeout: int = 120) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.Popen(
-        args,
-        cwd=cwd,
-        env=tool_env(),
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
+    try:
+        proc = subprocess.Popen(
+            args,
+            cwd=cwd,
+            env=tool_env(),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    except FileNotFoundError as exc:
+        return subprocess.CompletedProcess(args, 127, f"missing executable: {args[0]} ({exc})", None)
     try:
         stdout, _ = proc.communicate(timeout=timeout)
         return subprocess.CompletedProcess(args, proc.returncode, stdout, None)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
+        if hasattr(os, "killpg"):
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+        else:
+            proc.kill()
         return subprocess.CompletedProcess(args, -9, f"timed out after {timeout}s", None)
 
 
