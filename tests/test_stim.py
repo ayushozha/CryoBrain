@@ -1,5 +1,6 @@
 import numpy as np
 
+from cryobrain.accuracy.benchmark_vectors import generate_rtl_benchmark, write_rtl_benchmark
 from cryobrain.accuracy.decoder_policy import decoder_quality_multiplier, simulate_candidate_ler
 from cryobrain.accuracy.mwpm_baseline import decode_with_mwpm
 from cryobrain.accuracy.stim_harness import (
@@ -27,6 +28,20 @@ def test_sample_shots_returns_uint8_separate_observables():
     assert dets.ndim == 2
     assert obs.ndim == 2
     assert dets.shape[0] == 8
+
+
+def test_rtl_benchmark_uses_real_stim_detector_windows(tmp_path):
+    scenario = ScenarioConfig(distance=3, noise_rate=0.001, shots=16, rounds=3)
+    benchmark = generate_rtl_benchmark(scenario, vectors=16, seed=1234)
+    assert benchmark.metadata["source"] == "Stim surface_code:rotated_memory_z detector samples"
+    assert benchmark.metadata["hard_vectors"] > 0
+    assert len(benchmark.vectors) == 16
+    assert all(0 <= syndrome <= 0xFF and 0 <= expected <= 0xF for syndrome, expected in benchmark.vectors)
+
+    vector_path = write_rtl_benchmark(tmp_path / "stim_vectors.mem", benchmark)
+    lines = vector_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 16
+    assert all(len(line.split()) == 2 for line in lines)
 
 
 def test_mwpm_decode_accepts_uint8_detectors():

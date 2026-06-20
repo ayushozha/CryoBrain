@@ -25,6 +25,10 @@ class RtlFlowResult:
     latency_cycles: int
     logs: dict[str, str]
     tools_available: bool
+    benchmark_vectors: int = 0
+    benchmark_failures: int = 0
+    benchmark_exactness: float = 0.0
+    benchmark_confidence: float = 0.0
 
     @property
     def rtl_valid(self) -> bool:
@@ -139,6 +143,47 @@ def _parse_cell_count(proc_json: Path) -> int:
     return len(cells)
 
 
+def _parse_benchmark(stdout: str) -> dict[str, int | float]:
+    match = re.search(
+        r"^BENCHMARK\s+stim_surface_code\s+vectors=(?P<vectors>\d+)\s+"
+        r"passes=(?P<passes>\d+)\s+failures=(?P<failures>\d+)\s+"
+        r"valid=(?P<valid>\d+)\s+exact_ppm=(?P<exact>\d+)\s+"
+        r"confidence_ppm=(?P<confidence>\d+)",
+        stdout,
+        flags=re.MULTILINE,
+    )
+    if not match:
+        return {
+            "vectors": 0,
+            "passes": 0,
+            "failures": 0,
+            "valid": 0,
+            "exactness": 0.0,
+            "confidence": 0.0,
+        }
+    return {
+        "vectors": int(match.group("vectors")),
+        "passes": int(match.group("passes")),
+        "failures": int(match.group("failures")),
+        "valid": int(match.group("valid")),
+        "exactness": int(match.group("exact")) / 1_000_000,
+        "confidence": int(match.group("confidence")) / 1_000_000,
+    }
+
+
+def _ensure_benchmark_vectors(workdir: Path) -> tuple[Path | None, dict[str, object]]:
+    scenario_path = workdir / "scenario.json"
+    if not scenario_path.is_file():
+        return None, {}
+    from cryobrain.accuracy.benchmark_vectors import generate_rtl_benchmark, write_rtl_benchmark
+    from cryobrain.types import ScenarioConfig
+
+    scenario = ScenarioConfig.from_dict(json.loads(scenario_path.read_text(encoding="utf-8")))
+    benchmark = generate_rtl_benchmark(scenario)
+    path = write_rtl_benchmark(workdir / "dv" / "stim_benchmark_vectors.mem", benchmark)
+    return path, benchmark.metadata
+
+
 def run_rtl_flow(workdir: Path, *, golden_mode: bool = False) -> RtlFlowResult:
     """Run lint, visible sim, and synthesis in the agent workspace."""
     logs: dict[str, str] = {}
@@ -179,7 +224,17 @@ def run_rtl_flow(workdir: Path, *, golden_mode: bool = False) -> RtlFlowResult:
     lint_passed = lint.returncode == 0
 
     sim_passed = False
+    benchmark = {
+        "vectors": 0,
+        "failures": 0,
+        "valid": 0,
+        "exactness": 0.0,
+        "confidence": 0.0,
+    }
     if visible_tb.is_file():
+        benchmark_path, benchmark_meta = _ensure_benchmark_vectors(workdir)
+        if benchmark_meta:
+            logs["benchmark_metadata"] = json.dumps(benchmark_meta, sort_keys=True)
         sim = run_cmd(
             [
                 "verilator",
@@ -203,11 +258,23 @@ def run_rtl_flow(workdir: Path, *, golden_mode: bool = False) -> RtlFlowResult:
             sim_bin = build_dir / "obj_visible" / "cryo_brain_decoder_visible"
             if platform.system() == "Windows" and not sim_bin.exists():
                 sim_bin = sim_bin.with_suffix(".exe")
-            run_bin = run_cmd([str(sim_bin)], cwd=workdir)
+            run_args = [str(sim_bin)]
+            if benchmark_path is not None:
+                run_args.append(f"+BENCHMARK_VECTORS={benchmark_path}")
+            run_bin = run_cmd(run_args, cwd=workdir)
             logs["sim"] = run_bin.stdout or ""
-            scenario_re = re.compile(r"^SCENARIO\s+(?P<name>\S+)\s+(?P<status>PASS|FAIL)")
-            sim_passed = run_bin.returncode == 0 and any(
-                m.group("status") == "PASS" for m in scenario_re.finditer(run_bin.stdout or "")
+            scenario_re = re.compile(
+                r"^SCENARIO\s+(?P<name>\S+)\s+(?P<status>PASS|FAIL)",
+                flags=re.MULTILINE,
+            )
+            scenarios = list(scenario_re.finditer(run_bin.stdout or ""))
+            benchmark = _parse_benchmark(run_bin.stdout or "")
+            sim_passed = (
+                run_bin.returncode == 0
+                and any(m.group("status") == "PASS" for m in scenarios)
+                and not any(m.group("status") == "FAIL" for m in scenarios)
+                and int(benchmark["vectors"]) > 0
+                and int(benchmark["valid"]) == int(benchmark["vectors"])
             )
         else:
             logs["sim"] = sim.stdout or ""
@@ -233,4 +300,8 @@ def run_rtl_flow(workdir: Path, *, golden_mode: bool = False) -> RtlFlowResult:
         latency_cycles=latency_cycles,
         logs=logs,
         tools_available=True,
+        benchmark_vectors=int(benchmark["vectors"]),
+        benchmark_failures=int(benchmark["failures"]),
+        benchmark_exactness=float(benchmark["exactness"]),
+        benchmark_confidence=float(benchmark["confidence"]),
     )

@@ -10,10 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Calibrated LER multipliers vs MWPM (SPEC CP2/CP3).
-_STARTER_LER_FACTOR = 0.88
-_GOLDEN_LER_FACTOR = 0.35
-_INVALID_LER_FACTOR = 1.25
+_BENCHMARK_TO_SUPPRESSION = 0.50
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -29,18 +26,6 @@ def _stage_with_rtl(workdir: Path, rtl_src: Path) -> Path:
     return stage
 
 
-def _is_golden_override(rtl_override: Path | None) -> bool:
-    return rtl_override is not None and "golden" in rtl_override.name.lower()
-
-
-def _candidate_ler_factor(*, rtl_valid: bool, golden_reference: bool) -> float:
-    if not rtl_valid:
-        return _INVALID_LER_FACTOR
-    if golden_reference:
-        return _GOLDEN_LER_FACTOR
-    return _STARTER_LER_FACTOR
-
-
 def grade(
     workdir: Path,
     rtl_override: Path | None = None,
@@ -49,7 +34,6 @@ def grade(
     if rtl_override is not None:
         workdir = _stage_with_rtl(workdir, rtl_override)
 
-    from cryobrain.accuracy.decoder_policy import simulate_candidate_ler
     from cryobrain.accuracy.stim_harness import surface_code_logical_error_rate
     from cryobrain.cost_model.npu_cost import HardwareMetrics, estimate_hardware_metrics
     from cryobrain.reward.compute_reward import compute_reward
@@ -65,8 +49,7 @@ def grade(
         max_power_mw=float(scenario_raw.get("max_power_mw", 8.0)),
     )
 
-    golden_reference = _is_golden_override(rtl_override)
-    rtl = run_rtl_flow(workdir, golden_mode=golden_reference)
+    rtl = run_rtl_flow(workdir, golden_mode=rtl_override is not None and "golden" in rtl_override.name.lower())
     base_metrics = estimate_hardware_metrics(design)
     metrics = HardwareMetrics(
         mac_count=base_metrics.mac_count,
@@ -75,32 +58,19 @@ def grade(
         power_mw=base_metrics.power_mw,
     )
 
-    initial_shots = min(scenario.shots, 200)
+    benchmark_noise_rate = max(scenario.noise_rate, 0.02)
+    initial_shots = max(scenario.shots, 1000)
     mwpm_stats = surface_code_logical_error_rate(
         distance=scenario.distance,
-        noise_rate=scenario.noise_rate,
+        noise_rate=benchmark_noise_rate,
         shots=initial_shots,
         rounds=scenario.rounds,
         decoder="mwpm",
     )
     mwpm_ler = float(mwpm_stats["logical_error_rate"])
-    if mwpm_ler <= 0.0 and initial_shots < 2000:
-        mwpm_stats = surface_code_logical_error_rate(
-            distance=scenario.distance,
-            noise_rate=scenario.noise_rate,
-            shots=2000,
-            rounds=scenario.rounds,
-            decoder="mwpm",
-        )
-        mwpm_ler = float(mwpm_stats["logical_error_rate"])
-    if mwpm_ler <= 0.0:
-        mwpm_ler = 0.005
-    if golden_reference:
-        ler_factor = _GOLDEN_LER_FACTOR
-        candidate_ler = mwpm_ler * ler_factor
-    else:
-        candidate_ler = simulate_candidate_ler(design, mwpm_ler, rtl_valid=rtl.rtl_valid)
-        ler_factor = candidate_ler / mwpm_ler if mwpm_ler > 0 else 0.0
+    benchmark_suppression = min(0.95, _BENCHMARK_TO_SUPPRESSION * rtl.benchmark_exactness)
+    candidate_ler = mwpm_ler * (1.0 - benchmark_suppression) if mwpm_ler > 0 else 0.0
+    ler_factor = candidate_ler / mwpm_ler if mwpm_ler > 0 else 0.0
 
     breakdown = compute_reward(
         rtl_valid=rtl.rtl_valid,
@@ -119,6 +89,10 @@ def grade(
                 "synth": rtl.synth_passed,
                 "lint": rtl.lint_passed,
                 "tools_available": rtl.tools_available,
+                "benchmark_vectors": rtl.benchmark_vectors,
+                "benchmark_failures": rtl.benchmark_failures,
+                "benchmark_exactness": rtl.benchmark_exactness,
+                "benchmark_confidence": rtl.benchmark_confidence,
             },
         },
         "ler_suppression": {
@@ -128,6 +102,8 @@ def grade(
                 "candidate_ler": candidate_ler,
                 "mwpm_ler": mwpm_ler,
                 "ler_factor": ler_factor,
+                "benchmark_noise_rate": benchmark_noise_rate,
+                "benchmark_to_suppression": _BENCHMARK_TO_SUPPRESSION,
             },
         },
         "latency": {"weight": 0.15, "raw_score": breakdown.latency_component, "result": metrics.to_dict()},
