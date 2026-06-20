@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HIDDEN = ROOT / "donotaccess"
+REQUIRED_TOOLS = ("verilator", "yosys")
 
 
 def _load_grade():
@@ -37,6 +38,11 @@ def _stage_baseline() -> Path:
 
 
 def main() -> int:
+    missing_tools = [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
+    if missing_tools:
+        print(json.dumps({"ok": False, "missing_tools": missing_tools}, indent=2))
+        return 1
+
     grade_mod = _load_grade()
     workdir = _stage_baseline()
 
@@ -49,10 +55,10 @@ def main() -> int:
         "starter": starter["reward"],
         "golden": golden["reward"],
     }
+    summary["ok"] = summary["wrong"] == 0.0 and 0.15 <= summary["starter"] <= 0.55 and summary["golden"] >= 0.6
     print(json.dumps(summary, indent=2))
 
-    ok = summary["wrong"] == 0.0 and 0.15 <= summary["starter"] <= 0.55 and summary["golden"] >= 0.6
-    return 0 if ok else 1
+    return 0 if summary["ok"] else 1
 
 
 if __name__ == "__main__":
