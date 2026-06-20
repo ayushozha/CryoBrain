@@ -10,6 +10,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+.venv-linux/
 .DS_Store
 .claude/
 
