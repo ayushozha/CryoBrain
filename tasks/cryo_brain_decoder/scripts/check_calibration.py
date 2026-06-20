@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Calibration driver (CP2/CP3): wrong → 0, starter → mid, golden → high."""
+"""Calibration driver (CP2 sanity + CP3 multi-rollout gate)."""
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,21 +25,13 @@ def _load_grade():
     return mod
 
 
-def _stage_baseline() -> Path:
-    stage = Path(tempfile.mkdtemp(prefix="cryobrain-calib-"))
-    for name in ("Makefile", "filelist.f", "rtl", "dv", "synth", "design_config.json", "scenario.json"):
-        src = ROOT / name
-        if not src.exists():
-            continue
-        dst = stage / name
-        if src.is_dir():
-            shutil.copytree(src, dst)
-        else:
-            shutil.copy2(src, dst)
-    return stage
-
-
 def main() -> int:
+    parser = argparse.ArgumentParser(description="CryoBrain CP2/CP3 calibration")
+    parser.add_argument("--cp2-only", action="store_true", help="Run CP2 sanity only")
+    parser.add_argument("--cp3-only", action="store_true", help="Run CP3 rollouts only")
+    args = parser.parse_args()
+
+    from cryobrain.calibration.cp3 import run_cp2_sanity, run_cp3_rollouts
     from cryobrain.rtl_grader.flow import eda_tools_available, missing_eda_tools
 
     if not eda_tools_available():
@@ -63,30 +54,30 @@ def main() -> int:
         return 1
 
     grade_mod = _load_grade()
-    workdir = _stage_baseline()
 
-    wrong = grade_mod.grade(workdir, rtl_override=HIDDEN / "cryo_brain_decoder_wrong.sv", hidden_root=HIDDEN)
-    starter = grade_mod.grade(workdir, hidden_root=HIDDEN)
-    golden = grade_mod.grade(workdir, rtl_override=HIDDEN / "cryo_brain_decoder_golden.sv", hidden_root=HIDDEN)
+    def _grade_starter(workdir: Path) -> dict[str, object]:
+        return grade_mod.grade(workdir, hidden_root=HIDDEN)
 
-    summary = {
-        "wrong": wrong["reward"],
-        "starter": starter["reward"],
-        "golden": golden["reward"],
-        "details": {
-            "wrong_caps": wrong.get("hard_caps"),
-            "starter_caps": starter.get("hard_caps"),
-            "golden_caps": golden.get("hard_caps"),
-        },
-    }
-    summary["ok"] = (
-        summary["wrong"] == 0.0
-        and 0.20 <= summary["starter"] <= 0.50
-        and summary["golden"] >= 0.60
-    )
-    print(json.dumps(summary, indent=2))
+    run_cp2 = not args.cp3_only
+    run_cp3 = not args.cp2_only
 
-    return 0 if summary["ok"] else 1
+    payload: dict[str, object] = {"ok": True}
+    if run_cp2:
+        cp2 = run_cp2_sanity(grade_mod.grade, ROOT, HIDDEN)
+        payload["cp2"] = cp2
+        if not cp2["ok"]:
+            payload["ok"] = False
+
+    if run_cp3:
+        cp3_result = run_cp3_rollouts(_grade_starter, ROOT)
+        payload["cp3"] = cp3_result["cp3"]
+        payload["rollouts"] = cp3_result["rollouts"]
+        payload["starter_rewards"] = cp3_result["rewards"]
+        if not cp3_result["cp3"]["ok"]:
+            payload["ok"] = False
+
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["ok"] else 1
 
 
 if __name__ == "__main__":

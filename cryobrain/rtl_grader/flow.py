@@ -178,8 +178,11 @@ def _ensure_benchmark_vectors(workdir: Path) -> tuple[Path | None, dict[str, obj
     from cryobrain.accuracy.benchmark_vectors import generate_rtl_benchmark, write_rtl_benchmark
     from cryobrain.types import ScenarioConfig
 
-    scenario = ScenarioConfig.from_dict(json.loads(scenario_path.read_text(encoding="utf-8")))
-    benchmark = generate_rtl_benchmark(scenario)
+    scenario_raw = json.loads(scenario_path.read_text(encoding="utf-8"))
+    scenario = ScenarioConfig.from_dict(scenario_raw)
+    seed = int(scenario_raw.get("benchmark_seed", 1729))
+    vectors = int(scenario_raw.get("benchmark_vectors", 64))
+    benchmark = generate_rtl_benchmark(scenario, seed=seed, vectors=vectors)
     path = write_rtl_benchmark(workdir / "dv" / "stim_benchmark_vectors.mem", benchmark)
     return path, benchmark.metadata
 
