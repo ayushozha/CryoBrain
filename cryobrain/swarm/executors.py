@@ -8,6 +8,7 @@ single monkeypatchable ``score_fn`` boundary without re-running Verilator.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Callable
@@ -87,13 +88,24 @@ def architect_propose_step(
     bus: EventBus,
     design_id: str,
     design: DesignConfig,
+    *,
+    context_pack: ContextPack | None = None,
+    prompt_influenced: bool = False,
 ) -> DesignConfig:
     """Emit Architect propose event for an already-selected DesignConfig."""
+    payload = design.to_dict()
+    if context_pack is not None and context_pack.hits:
+        payload["research_pack_hash"] = hashlib.sha256(
+            context_pack.prompt_block().encode()
+        ).hexdigest()[:6]
+        payload["prompt_influenced"] = prompt_influenced or bool(context_pack.urls)
+    elif context_pack is not None and context_pack.urls:
+        payload["prompt_influenced"] = prompt_influenced
     bus.emit(
         agent=Agent.ARCHITECT,
         action="propose",
         design_id=design_id,
-        payload=design.to_dict(),
+        payload=payload,
     )
     return design
 
@@ -238,18 +250,24 @@ def memory_step(
     design_id: str,
     store: MemoryStore,
     record: MemoryRecord,
+    *,
+    memory_tags: list[str] | None = None,
 ) -> str:
     """Persist a measured variant and emit Memory event."""
     rtl_hash = store.record_variant(record)
+    tags = memory_tags if memory_tags is not None else list(record.provenance.tags)
+    payload: dict[str, Any] = {
+        "rtl_hash": rtl_hash,
+        "rtl_path": record.rtl_path,
+        "candidate_ler": record.measurement.candidate_ler,
+        "verification_passed": record.verification.passed,
+    }
+    if tags:
+        payload["tags"] = tags
     bus.emit(
         agent=Agent.MEMORY,
         action="record_variant",
         design_id=design_id,
-        payload={
-            "rtl_hash": rtl_hash,
-            "rtl_path": record.rtl_path,
-            "candidate_ler": record.measurement.candidate_ler,
-            "verification_passed": record.verification.passed,
-        },
+        payload=payload,
     )
     return rtl_hash

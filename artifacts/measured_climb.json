@@ -1,7 +1,7 @@
 {
   "backend": "verilator+stim+yosys",
   "reward_source": "score_measured",
-  "steps": 5,
+  "steps": 1,
   "history": [
     {
       "step": 0,

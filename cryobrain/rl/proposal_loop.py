@@ -27,7 +27,7 @@ to exercise the wiring without EDA.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable
 
@@ -46,6 +46,7 @@ from cryobrain.swarm.executors import (
     score_step,
     verify_step,
 )
+from cryobrain.retrieval.context_pack import ContextPack
 from cryobrain.types import CryoBudget, DesignConfig
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,6 +54,27 @@ TASK_ROOT = ROOT / "tasks" / "cryo_brain_decoder"
 
 # A measured-score function: workdir -> score dict (Grok G10 shape).
 ScoreFn = Callable[[Path], dict[str, Any]]
+
+
+def _step_enum(current: int, allowed: tuple[int, ...]) -> int:
+    if current in allowed:
+        idx = allowed.index(current)
+        return allowed[min(len(allowed) - 1, idx + 1)]
+    return allowed[0]
+
+
+def apply_research_bias(design: DesignConfig, pack: ContextPack) -> DesignConfig:
+    """Nudge the proposed design using literature themes (§2.5 adoption)."""
+    if not pack.hits:
+        return design
+    text = " ".join(hit.get("snippet", "") for hit in pack.hits).lower()
+    if "fpga" in text or "parallel" in text:
+        return replace(design, parallelism=_step_enum(design.parallelism, (1, 2, 4)))
+    if "pipeline" in text or "latency" in text:
+        return replace(design, pipeline_depth=min(16, design.pipeline_depth + 2))
+    if "layer" in text or "depth" in text:
+        return replace(design, num_layers=min(4, max(2, design.num_layers)))
+    return design
 
 
 @dataclass(frozen=True)
@@ -142,8 +164,16 @@ def run_proposal_step(
     bus = bus or EventBus()
     design_id = f"d{step:03d}"
 
-    research_step(bus, design_id)
-    architect_propose_step(bus, design_id, design)
+    pack = research_step(bus, design_id)
+    biased_design = apply_research_bias(design, pack)
+    architect_propose_step(
+        bus,
+        design_id,
+        biased_design,
+        context_pack=pack,
+        prompt_influenced=biased_design != design,
+    )
+    design = biased_design
 
     workdir = stage_workdir(task_root, scenario=scenario, design=design.to_dict())
     rtl_path = rtl_generate_step(bus, design_id, design, workdir / "rtl")
@@ -213,6 +243,7 @@ def run_proposal_step(
             backend=backend,
             bus=bus,
             design_id=design_id,
+            context_pack=pack,
         )
         recorded = True
     else:
@@ -247,6 +278,7 @@ def _record_measured(
     backend: str,
     bus: EventBus | None = None,
     design_id: str | None = None,
+    context_pack: ContextPack | None = None,
 ) -> str:
     """Persist a measured, verified variant; return its rtl_hash.
 
@@ -264,15 +296,18 @@ def _record_measured(
         "power_mw_est": float(score.get("power_mw", 0.0)),
         "valid": True,
     }
+    provenance_tags = context_pack.memory_tags() if context_pack is not None else []
+
     record = MemoryRecord.build(
         rtl_path=str(rtl_path),
         design=design,
         measurement=measurement,
         synth=synth,
         verification=Verification.from_layers(layers_passed or None, passed=True),
-        provenance={"step": step, "backend": backend},
+        provenance={"step": step, "backend": backend, "tags": provenance_tags},
     )
     target = store if store is not None else MemoryStore()
     if bus is not None and design_id is not None:
-        return memory_step(bus, design_id, target, record)
+        tags = list(record.provenance.tags)
+        return memory_step(bus, design_id, target, record, memory_tags=tags)
     return target.record_variant(record)
