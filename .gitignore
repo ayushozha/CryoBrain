@@ -31,3 +31,4 @@ sim_build/
 
 # IDE / local tooling
 mcps/
+.gstack/

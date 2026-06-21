@@ -12,7 +12,7 @@ neural quantum error correction (QEC) decoder against two verifiable axes:
 The repo forks [`hud-evals/verilog-template`](https://github.com/hud-evals/verilog-template) and
 keeps classical FIFO mutant-kill tasks armed as a complete fallback track (CP7).
 
-Full product spec: [`SPEC.md`](SPEC.md).
+Full product spec: [`docs/specs/SPEC-v5.md`](docs/specs/SPEC-v5.md) (canonical). Agent orchestration: [`docs/agents/README.md`](docs/agents/README.md).
 
 ---
 
@@ -31,7 +31,8 @@ Full product spec: [`SPEC.md`](SPEC.md).
 | `scripts/` | CP0–CP3 checkpoint scripts |
 | `tests/` | Integration tests for catalog, env tools, checkpoints |
 | `Dockerfile.hud` | Container image for `hud serve` + `hud eval --runtime hud` |
-| `SPEC.md` | Spec v2 (reward design, checkpoints, demo script) |
+| `docs/specs/` | Versioned specs (v5 canonical — measured LER, RTL gen, verification stack) |
+| `docs/agents/` | Multi-agent handoff docs (Grok / Claude / Codex) |
 
 ---
 

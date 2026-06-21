@@ -1,7 +1,7 @@
 import numpy as np
+import pytest
 
 from cryobrain.accuracy.benchmark_vectors import generate_rtl_benchmark, write_rtl_benchmark
-from cryobrain.accuracy.decoder_policy import decoder_quality_multiplier, simulate_candidate_ler
 from cryobrain.accuracy.mwpm_baseline import decode_with_mwpm
 from cryobrain.accuracy.stim_harness import (
     count_logical_errors,
@@ -75,37 +75,31 @@ def test_ler_suppression_vs_mwpm_metric():
     assert ler_suppression_vs_mwpm(0.0, 0.02) == 1.0
 
 
-def test_decoder_policy_maps_design_knobs():
-    mwpm_ler = 0.02
-    starter = DesignConfig()
-    strong = DesignConfig(bitwidth=8, num_layers=4, window_length=16, parallelism=2, pipeline_depth=4)
-    weak = DesignConfig(bitwidth=2, num_layers=1, window_length=4, parallelism=1, pipeline_depth=8)
-
-    starter_ler = simulate_candidate_ler(starter, mwpm_ler, rtl_valid=True)
-    strong_ler = simulate_candidate_ler(strong, mwpm_ler, rtl_valid=True)
-    weak_ler = simulate_candidate_ler(weak, mwpm_ler, rtl_valid=True)
-    invalid_ler = simulate_candidate_ler(starter, mwpm_ler, rtl_valid=False)
-
-    assert abs(starter_ler / mwpm_ler - 0.82) < 0.02
-    assert strong_ler < starter_ler < weak_ler
-    assert invalid_ler > mwpm_ler
-    assert decoder_quality_multiplier(strong) < decoder_quality_multiplier(weak)
+def test_policy_decoder_proxy_is_removed():
+    with pytest.raises(ValueError, match="policy decoder proxy was removed"):
+        surface_code_logical_error_rate(
+            distance=3,
+            noise_rate=0.008,
+            shots=120,
+            rounds=3,
+            decoder="policy",
+            design=DesignConfig(),
+            rtl_valid=True,
+        )
 
 
-def test_policy_decoder_returns_suppression():
-    # Use moderate noise so MWPM registers errors and policy can beat the anchor.
-    stats = surface_code_logical_error_rate(
-        distance=3,
-        noise_rate=0.008,
-        shots=120,
-        rounds=3,
-        decoder="policy",
-        design=DesignConfig(),
-        rtl_valid=True,
-    )
-    assert stats["mwpm_logical_error_rate"] > 0.0
-    assert stats["logical_error_rate"] < stats["mwpm_logical_error_rate"]
-    assert 0.0 < stats["ler_suppression_vs_mwpm"] < 1.0
+def test_evaluate_accuracy_no_longer_rewards_design_knobs():
+    scenario = ScenarioConfig(distance=3, noise_rate=0.008, shots=120, rounds=3)
+    weak = DesignConfig(bitwidth=2, num_layers=1, window_length=4)
+    strong = DesignConfig(bitwidth=8, num_layers=4, window_length=16, parallelism=2)
+
+    weak_stats = evaluate_accuracy(scenario, weak, rtl_valid=True)
+    strong_stats = evaluate_accuracy(scenario, strong, rtl_valid=True)
+
+    assert weak_stats["candidate_ler"] == weak_stats["mwpm_ler"]
+    assert strong_stats["candidate_ler"] == strong_stats["mwpm_ler"]
+    assert weak_stats["ler_suppression_vs_mwpm"] == 0.0
+    assert strong_stats["ler_suppression_vs_mwpm"] == 0.0
 
 
 def test_evaluate_accuracy_end_to_end():
@@ -113,7 +107,7 @@ def test_evaluate_accuracy_end_to_end():
     design = DesignConfig(bitwidth=8, num_layers=3)
     result = evaluate_accuracy(scenario, design, rtl_valid=True)
     assert result["distance"] == 5.0
-    assert result["candidate_ler"] <= result["mwpm_ler"]
+    assert result["candidate_ler"] == result["mwpm_ler"]
     assert result["ler_suppression_vs_mwpm"] == ler_suppression_vs_mwpm(
         result["candidate_ler"], result["mwpm_ler"]
     )

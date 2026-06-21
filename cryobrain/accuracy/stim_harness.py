@@ -5,7 +5,6 @@ from __future__ import annotations
 import numpy as np
 import stim
 
-from cryobrain.accuracy.decoder_policy import simulate_candidate_ler
 from cryobrain.reward.compute_reward import ler_suppression_vs_mwpm
 from cryobrain.types import DesignConfig, ScenarioConfig
 
@@ -86,7 +85,7 @@ def surface_code_logical_error_rate(
 
     ``decoder`` options:
     - ``mwpm``: real PyMatching decode on Stim shots.
-    - ``policy``: MWPM anchor + simulated candidate LER from ``design`` knobs.
+    - ``policy``: removed in SPEC-v5; use measured RTL scoring for candidates.
     """
     circuit = surface_code_memory_circuit(distance, noise_rate, rounds)
     dets, obs = sample_shots(circuit, shots)
@@ -99,9 +98,7 @@ def surface_code_logical_error_rate(
     if decoder == "mwpm":
         ler = mwpm_ler
     elif decoder == "policy":
-        if design is None:
-            design = DesignConfig()
-        ler = simulate_candidate_ler(design, mwpm_ler, rtl_valid=rtl_valid)
+        raise ValueError("policy decoder proxy was removed; use measure_candidate_ler")
     else:
         raise ValueError(f"unsupported decoder {decoder!r}; expected 'mwpm' or 'policy'")
 
@@ -129,20 +126,20 @@ def evaluate_accuracy(
     *,
     rtl_valid: bool = True,
 ) -> dict[str, float]:
-    """Full accuracy snapshot: MWPM anchor + policy candidate + suppression."""
+    """Fail-closed accuracy snapshot until measured RTL scoring is wired."""
     stats = surface_code_logical_error_rate(
         distance=scenario.distance,
         noise_rate=scenario.noise_rate,
         shots=scenario.shots,
         rounds=scenario.rounds,
-        decoder="policy",
-        design=design,
-        rtl_valid=rtl_valid,
+        decoder="mwpm",
     )
-    candidate_ler = float(stats["logical_error_rate"])
-    mwpm_ler = float(stats["mwpm_logical_error_rate"])
+    mwpm_ler = float(stats["logical_error_rate"])
+    candidate_ler = mwpm_ler
+    _ = design, rtl_valid
     return {
         **stats,
+        "decoder": "mwpm_fail_closed",
         "candidate_ler": candidate_ler,
         "mwpm_ler": mwpm_ler,
         "ler_suppression_vs_mwpm": ler_suppression_vs_mwpm(candidate_ler, mwpm_ler),
