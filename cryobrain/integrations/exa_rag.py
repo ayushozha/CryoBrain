@@ -48,19 +48,27 @@ def _snippet(item: Any) -> str:
 def _search_with_contents(exa: Any, query: str, num_results: int) -> Any:
     """Call Exa for results WITH contents so snippets actually populate.
 
-    ``exa.search`` alone returns no text; ``search_and_contents`` is the
-    documented way to get ``text``/``highlights``. Fall back to plain search
-    only if the contents method is unavailable in an older SDK.
+    In exa-py 2.x ``search()`` returns text contents by default (no ``text``
+    kwarg — passing one raises ``TypeError``), and ``search_and_contents`` is
+    deprecated. So prefer a plain ``search`` and read ``.text`` off each result.
+    Fall back to the legacy ``search_and_contents`` only if plain search yields
+    no contents on an older 1.x client.
     """
+    response = exa.search(query, num_results=num_results)
+    has_text = any(
+        (getattr(r, "text", "") or getattr(r, "highlights", None))
+        for r in (getattr(response, "results", []) or [])
+    )
+    if has_text:
+        return response
+    # Older 1.x SDK: bare search returns no text; pull contents explicitly.
     method = getattr(exa, "search_and_contents", None)
     if callable(method):
-        return method(
-            query,
-            num_results=num_results,
-            text={"max_characters": SNIPPET_CHARS},
-            highlights=True,
-        )
-    return exa.search(query, num_results=num_results)
+        try:
+            return method(query, num_results=num_results, text=True, highlights=True)
+        except TypeError:
+            return response
+    return response
 
 
 def search_decoder_literature(

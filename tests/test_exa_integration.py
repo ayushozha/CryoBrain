@@ -72,8 +72,33 @@ def test_context_pack_provenance_shape():
 # ------------------------------------------------------------------- live ---
 
 
+def _key_is_usable() -> bool:
+    """True only if the resolved EXA key actually authenticates.
+
+    The ``_LIVE`` gate only proves a key *string* is present, but a stale
+    placeholder (e.g. ``EXA_API_KEY=REPLACE_ME`` exported in the shell, which
+    python-dotenv won't override unless the project .env is loaded) passes that
+    gate yet 401s. A direct probe distinguishes "no usable key" (skip) from a
+    real "valid key but Exa returned nothing" (fail loudly).
+    """
+    from cryobrain.integrations.exa_rag import _client
+
+    client = _client()
+    if client is None:
+        return False
+    try:
+        client.search("quantum error correction", num_results=1)
+        return True
+    except Exception as exc:  # noqa: BLE001 - auth/transport -> not usable
+        if "401" in str(exc) or "INVALID_API_KEY" in str(exc):
+            return False
+        raise
+
+
 @pytest.mark.skipif(not _LIVE, reason=_LIVE_REASON)
 def test_live_search_returns_cited_results():
+    if not _key_is_usable():
+        pytest.skip("EXA_API_KEY present but not usable (placeholder/invalid/401)")
     pack = build_context_pack(DEFAULT_QUERY, num_results=3)
     assert pack.hits, "live Exa search returned no results"
     first = pack.hits[0]
