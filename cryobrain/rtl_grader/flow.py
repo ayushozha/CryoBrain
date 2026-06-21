@@ -72,7 +72,7 @@ def tool_env() -> dict[str, str]:
     path_parts: list[str] = []
     for candidate in _oss_cad_candidates():
         path_parts.append(str(candidate))
-    if platform.system() == "Darwin":
+    if platform.system() in {"Darwin", "Linux"}:
         path_parts.extend(["/usr/bin", "/bin", "/usr/sbin", "/sbin"])
     path_parts.append(env.get("PATH", ""))
     separator = ";" if platform.system() == "Windows" else ":"

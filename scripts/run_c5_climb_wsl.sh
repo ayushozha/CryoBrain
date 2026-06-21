@@ -31,6 +31,9 @@ uv run pytest tests/test_local_trainer_measured.py -q
 echo "=== C5 REAL measured climb (${STEPS} steps, deterministic proposer) ==="
 uv run python -m cryobrain.rl.local_trainer --steps "${STEPS}" --no-fireworks --memory-ab
 
+echo "=== C5 measured Pareto ==="
+uv run python -m cryobrain.benchmark.pareto --emit "${REPO}/artifacts/measured_pareto.json"
+
 echo "=== C5 climb artifact ==="
 uv run python - "${REPO}/artifacts/measured_climb.json" <<'PY'
 import json, sys

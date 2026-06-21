@@ -241,52 +241,74 @@ def _pareto_from_measured(measured: dict) -> list[dict]:
     return points
 
 
-def _resolve_data_era(*eras: str) -> str:
-    unique = set(eras)
-    if unique == {"measured"}:
-        return "measured"
-    if unique == {"proxy"}:
-        return "proxy"
-    return "mixed"
+class MissingMeasuredArtifactsError(RuntimeError):
+    """Raised when required measured artifacts are absent (no proxy fallback)."""
 
 
-def build_bundle(artifacts_dir: Path | None = None) -> dict:
+def _require_measured_climb(artifacts: Path) -> tuple[dict, str]:
+    measured = _load(artifacts / "measured_climb.json")
+    if not isinstance(measured, dict) or not measured.get("history"):
+        raise MissingMeasuredArtifactsError(
+            "artifacts/measured_climb.json with non-empty history is required "
+            "(run scripts/run_c5_climb_wsl.sh in WSL)"
+        )
+    return _normalize_measured_climb(measured), "artifacts/measured_climb.json"
+
+
+def _require_measured_memory(artifacts: Path) -> tuple[dict, str]:
+    measured = _load(artifacts / "measured_memory_ab.json")
+    memory = _memory_from_measured(measured) if isinstance(measured, dict) else None
+    if not memory:
+        raise MissingMeasuredArtifactsError(
+            "artifacts/measured_memory_ab.json is required "
+            "(run scripts/run_memory_ab_wsl.sh in WSL)"
+        )
+    return memory, "artifacts/measured_memory_ab.json"
+
+
+def _require_measured_pareto(artifacts: Path) -> tuple[list[dict], str]:
+    measured = _load(artifacts / "measured_pareto.json")
+    if not isinstance(measured, dict) or not measured.get("points"):
+        raise MissingMeasuredArtifactsError(
+            "artifacts/measured_pareto.json with points is required "
+            "(produced by measured climb / pareto export)"
+        )
+    return _pareto_from_measured(measured), "artifacts/measured_pareto.json"
+
+
+def build_bundle(artifacts_dir: Path | None = None, *, require_measured: bool = True) -> dict:
     artifacts = artifacts_dir or ARTIFACTS
     vcd = artifacts / "cryo_golden_trace.vcd"
     waveform = write_waveform_json(vcd, artifacts / "waveform.json") if vcd.is_file() else None
 
-    climb_era = "proxy"
-    climb_source = "artifacts/climb_chart_rl.json"
-    measured_climb = _load(artifacts / "measured_climb.json")
-    if isinstance(measured_climb, dict) and measured_climb.get("history"):
-        climb = _normalize_measured_climb(measured_climb)
-        climb_era = "measured"
-        climb_source = "artifacts/measured_climb.json"
+    if require_measured:
+        climb, climb_source = _require_measured_climb(artifacts)
+        memory, memory_source = _require_measured_memory(artifacts)
+        pareto, pareto_source = _require_measured_pareto(artifacts)
+        climb_era = memory_era = pareto_era = "measured"
     else:
-        climb = _load(artifacts / "climb_chart_rl.json") or _load(artifacts / "climb_chart.json")
+        measured_climb = _load(artifacts / "measured_climb.json")
+        climb = (
+            _normalize_measured_climb(measured_climb)
+            if isinstance(measured_climb, dict) and measured_climb.get("history")
+            else None
+        )
+        climb_source = "artifacts/measured_climb.json" if climb else ""
+        climb_era = "measured" if climb else "missing"
 
-    memory_era = "proxy"
-    memory_source = "artifacts/memory_ab_overlay.json"
-    measured_memory = _load(artifacts / "measured_memory_ab.json")
-    memory = _memory_from_measured(measured_memory) if isinstance(measured_memory, dict) else None
-    if memory:
-        memory_era = "measured"
-        memory_source = "artifacts/measured_memory_ab.json"
-    else:
-        no_mem = _load(artifacts / "climb_chart_no_memory.json")
-        with_mem = _load(artifacts / "climb_chart_memory.json")
-        memory = _memory_overlay(no_mem, with_mem, _load(artifacts / "memory_ab_overlay.json"))
+        measured_memory = _load(artifacts / "measured_memory_ab.json")
+        memory = _memory_from_measured(measured_memory) if isinstance(measured_memory, dict) else None
+        memory_source = "artifacts/measured_memory_ab.json" if memory else ""
+        memory_era = "measured" if memory else "missing"
 
-    pareto_era = "proxy"
-    pareto_source = "artifacts/designs.json"
-    measured_pareto = _load(artifacts / "measured_pareto.json")
-    if isinstance(measured_pareto, dict) and measured_pareto.get("points"):
-        pareto = _pareto_from_measured(measured_pareto)
-        pareto_era = "measured"
-        pareto_source = "artifacts/measured_pareto.json"
-    else:
-        designs = _load(artifacts / "designs.json") or _load(artifacts / "designs_rl.json")
-        pareto = _pareto_points(designs if isinstance(designs, list) else None)
+        measured_pareto = _load(artifacts / "measured_pareto.json")
+        pareto = (
+            _pareto_from_measured(measured_pareto)
+            if isinstance(measured_pareto, dict) and measured_pareto.get("points")
+            else []
+        )
+        pareto_source = "artifacts/measured_pareto.json" if pareto else ""
+        pareto_era = "measured" if pareto else "missing"
 
     cp5_audit = _load(artifacts / "cp5_audit.json")
     yosys_area_um2 = 6.0
@@ -309,7 +331,7 @@ def build_bundle(artifacts_dir: Path | None = None) -> dict:
     swarm_timeline = build_swarm_timeline(artifacts / "swarm" / "event_log.jsonl")
 
     return {
-        "data_era": _resolve_data_era(climb_era, memory_era, pareto_era),
+        "data_era": "measured" if require_measured else climb_era,
         "waveform": waveform,
         "climb": climb,
         "memory": memory,

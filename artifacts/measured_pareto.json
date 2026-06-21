@@ -1,0 +1,21 @@
+{
+  "accuracy_axis": "measured LER (Verilator)",
+  "hardware_axis": "Yosys area (\u00b5m\u00b2) \u2014 lower is cheaper",
+  "frontier_axes": [
+    "ler",
+    "area_um2"
+  ],
+  "count": 1,
+  "frontier_count": 1,
+  "points": [
+    {
+      "label": "cryo_brain_decoder@239eb2ca",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 8,
+      "rtl_path": "/tmp/cryobrain-rollout-7nmphsms/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "239eb2ca81561e4df273f2c0fba404a23e02996440087465b0e807f8a735ae2d",
+      "on_frontier": true
+    }
+  ]
+}
