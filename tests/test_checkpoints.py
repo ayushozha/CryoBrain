@@ -33,6 +33,16 @@ def test_check_cp1_imports_and_runs():
     assert code in (0, 1)
 
 
+@pytest.mark.parametrize(
+    "script",
+    ["check_cp2.py", "check_cp5.py", "check_cp6.py", "check_cp7.py"],
+)
+def test_new_checkpoint_scripts_import(script: str):
+    mod = _load_script(script)
+    code = mod.main()
+    assert code in (0, 1)
+
+
 def test_check_cp0_via_subprocess():
     proc = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "check_cp0.py")],

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from cryobrain.artifacts.curriculum import load_climb_chart, plot_distance_curriculum, write_curriculum_meta
-from cryobrain.rl.local_trainer import baseline_designs
+from cryobrain.calibration.cp6 import baseline_anchors
 
 
 def _pareto_mask(designs: list[dict[str, object]]) -> list[bool]:
@@ -37,10 +37,10 @@ def load_designs(
     designs_path: Path = Path("artifacts/designs.json"),
     include_baselines: bool = True,
 ) -> list[dict[str, object]]:
-    """Merge RL rollouts with MWPM + neural reference anchors."""
+    """Merge real CP6 graded designs with MWPM + neural reference anchors."""
     merged: list[dict[str, object]] = []
     if include_baselines:
-        merged.extend(baseline_designs())
+        merged.extend(baseline_anchors())
 
     if designs_path.is_file():
         raw = json.loads(designs_path.read_text(encoding="utf-8"))
@@ -49,7 +49,8 @@ def load_designs(
                 if isinstance(item, dict):
                     merged.append(item)
 
-    if len(merged) <= 2:
+    policy_count = sum(1 for d in merged if d.get("kind") == "policy")
+    if policy_count < 3:
         merged.extend(
             [
                 {"name": "agent-v1", "kind": "policy", "area_mm2": 0.035, "ler_suppression": 0.18},
@@ -169,8 +170,8 @@ def generate_all_artifacts(
         outputs["curriculum_json"] = write_curriculum_meta(
             climb, output=artifacts_dir / "distance_curriculum.json"
         )
-    else:
-        # Synthetic curriculum for demo when training has not run yet.
+    elif not designs_path.is_file():
+        # Synthetic curriculum only when neither real CP6 artifacts exist.
         synthetic_steps = np.linspace(0, 49, 50)
         rewards = 0.28 + 0.45 * (1 - np.exp(-synthetic_steps / 18))
         history = []
@@ -191,7 +192,7 @@ def generate_all_artifacts(
                 {"step": 32, "from_distance": 5, "to_distance": 7, "reward_at_transition": 0.49},
             ],
             "final_distance": 7,
-            "summary": {"note": "synthetic — run modal_train for real climb chart"},
+            "summary": {"note": "synthetic — run check_cp6 for real climb chart"},
         }
         outputs["curriculum_png"] = plot_distance_curriculum(
             synthetic, output=artifacts_dir / "distance_curriculum.png"

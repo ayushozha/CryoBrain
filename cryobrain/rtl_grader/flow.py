@@ -35,6 +35,13 @@ class RtlFlowResult:
         return self.tools_available and self.sim_passed and self.synth_passed and self.lint_passed
 
 
+@dataclass(frozen=True)
+class RtlTraceResult:
+    trace_passed: bool
+    vcd_path: Path | None
+    logs: dict[str, str]
+
+
 def _oss_cad_candidates() -> list[Path]:
     home = Path.home()
     system = platform.system()
@@ -308,3 +315,75 @@ def run_rtl_flow(workdir: Path, *, golden_mode: bool = False) -> RtlFlowResult:
         benchmark_exactness=float(benchmark["exactness"]),
         benchmark_confidence=float(benchmark["confidence"]),
     )
+
+
+def run_rtl_trace(workdir: Path, *, vcd_output: Path) -> RtlTraceResult:
+    """Verilator --trace run; copy VCD to vcd_output for CP5 artifacts."""
+    logs: dict[str, str] = {}
+    rtl = workdir / "rtl" / "cryo_brain_decoder.sv"
+    visible_tb = workdir / "dv" / "visible_tb.sv"
+    build_dir = workdir / "build" / "obj_trace"
+    build_dir.mkdir(parents=True, exist_ok=True)
+    vcd_output.parent.mkdir(parents=True, exist_ok=True)
+
+    missing = missing_eda_tools()
+    if missing:
+        for tool in missing:
+            logs[tool] = _tool_missing_log(tool)
+        return RtlTraceResult(trace_passed=False, vcd_path=None, logs=logs)
+
+    if not visible_tb.is_file():
+        logs["trace"] = "visible_tb.sv missing"
+        return RtlTraceResult(trace_passed=False, vcd_path=None, logs=logs)
+
+    benchmark_path, benchmark_meta = _ensure_benchmark_vectors(workdir)
+    if benchmark_meta:
+        logs["benchmark_metadata"] = json.dumps(benchmark_meta, sort_keys=True)
+
+    trace = run_cmd(
+        [
+            "verilator",
+            "--trace",
+            "--binary",
+            "--timing",
+            "-Wno-fatal",
+            "--top-module",
+            "cryo_brain_decoder_visible_tb",
+            "-Mdir",
+            str(build_dir),
+            "-o",
+            "cryo_brain_decoder_trace",
+            str(rtl),
+            str(visible_tb),
+        ],
+        cwd=workdir,
+        timeout=240,
+    )
+    logs["verilate_trace"] = trace.stdout or ""
+    if trace.returncode != 0:
+        return RtlTraceResult(trace_passed=False, vcd_path=None, logs=logs)
+
+    sim_bin = build_dir / "cryo_brain_decoder_trace"
+    if platform.system() == "Windows" and not sim_bin.exists():
+        sim_bin = sim_bin.with_suffix(".exe")
+    trace_vcd = workdir / "trace.vcd"
+    run_args = [str(sim_bin), "+TRACE_VCD", f"+trace_vcd={trace_vcd}"]
+    if benchmark_path is not None:
+        run_args.append(f"+BENCHMARK_VECTORS={benchmark_path}")
+    run_bin = run_cmd(run_args, cwd=workdir, timeout=180)
+    logs["sim_trace"] = run_bin.stdout or ""
+
+    vcd_candidates: list[Path] = []
+    if trace_vcd.is_file():
+        vcd_candidates.append(trace_vcd)
+    vcd_candidates.extend(sorted(build_dir.glob("*.vcd"), key=lambda p: p.stat().st_mtime, reverse=True))
+    vcd_candidates.extend(sorted(workdir.glob("*.vcd"), key=lambda p: p.stat().st_mtime, reverse=True))
+    if not vcd_candidates:
+        vcd_candidates = sorted(workdir.rglob("*.vcd"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not vcd_candidates:
+        logs["vcd"] = "no VCD produced"
+        return RtlTraceResult(trace_passed=False, vcd_path=None, logs=logs)
+
+    shutil.copy2(vcd_candidates[0], vcd_output)
+    passed = run_bin.returncode == 0 and vcd_output.is_file() and vcd_output.stat().st_size > 64
+    return RtlTraceResult(trace_passed=passed, vcd_path=vcd_output, logs=logs)

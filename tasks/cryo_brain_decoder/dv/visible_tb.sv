@@ -113,6 +113,15 @@ module cryo_brain_decoder_visible_tb;
     endtask
 
     initial begin
+        string trace_path;
+        if ($test$plusargs("TRACE_VCD")) begin
+            if ($value$plusargs("trace_vcd=%s", trace_path)) begin
+                $dumpfile(trace_path);
+            end else begin
+                $dumpfile("trace.vcd");
+            end
+            $dumpvars(0, cryo_brain_decoder_visible_tb);
+        end
         rst_n = 0;
         syndromes_valid = 0;
         syndromes = 0;

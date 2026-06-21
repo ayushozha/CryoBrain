@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CP3: real multi-rollout reward calibration (no simulations).
+# CP7: all FIFO fallback task calibrations.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -12,10 +12,6 @@ if [[ ! -x "${OSS_BIN}/verilator" ]]; then
 fi
 
 cd "${REPO}"
-echo "=== CP3 tool versions ==="
-verilator --version | head -1
-yosys -V | head -1
-
 export PATH="${HOME}/.local/bin:${PATH}"
 if ! command -v uv >/dev/null 2>&1; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -25,5 +21,5 @@ export UV_PROJECT_ENVIRONMENT="${REPO}/.venv-linux"
 uv sync
 export PATH="${UV_PROJECT_ENVIRONMENT}/bin:${PATH}"
 
-echo "=== CP3 calibration (10 rollouts) ==="
-python tasks/cryo_brain_decoder/scripts/check_calibration.py
+echo "=== CP7 FIFO fallback calibrations ==="
+python scripts/check_cp7.py
