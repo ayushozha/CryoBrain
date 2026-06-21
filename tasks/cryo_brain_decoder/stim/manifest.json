@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "splits": {
+    "train": {
+      "seed": 1729,
+      "vectors": 64,
+      "scenario": {
+        "distance": 3,
+        "noise_rate": 0.02,
+        "shots": 1000,
+        "rounds": 3
+      }
+    },
+    "holdout": {
+      "seed": 4242,
+      "vectors": 64,
+      "scenario": {
+        "distance": 3,
+        "noise_rate": 0.02,
+        "shots": 1000,
+        "rounds": 3
+      }
+    }
+  },
+  "checksum": "3d1e7c7e9cf2e2e9"
+}
