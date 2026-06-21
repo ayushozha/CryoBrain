@@ -1,0 +1,7 @@
+{
+  "candidate_ler": 0.0,
+  "mwpm_ler": 0.167,
+  "suppression": 1.0,
+  "rtl_valid": true,
+  "benchmark_vectors": 64
+}

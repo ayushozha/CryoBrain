@@ -1,0 +1,13 @@
+{
+  "rtl_hash": "ec7d2311a6fab9955c001fca09850d4112d7960b09263dd1fc7d79f9b1019591",
+  "rtl_path": "/tmp/cryobrain-rollout-5a0d1lq_/rtl/cryo_brain_decoder.sv",
+  "candidate_ler": 0.0,
+  "verification_passed": true,
+  "tags": [
+    "exa:https://arxiv.org/html/2605.04892v1",
+    "exa:https://iopscience.iop.org/article/10.1088/2058-9565/adc3ba",
+    "exa:https://export.arxiv.org/pdf/2305.15767v1.pdf",
+    "exa:https://arxiv.org/html/2411.18090v1",
+    "exa:https://arxiv.org/pdf/2309.05558"
+  ]
+}

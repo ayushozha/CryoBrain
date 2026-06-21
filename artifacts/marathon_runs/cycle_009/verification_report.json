@@ -1,0 +1,42 @@
+{
+  "all_passed": true,
+  "design": "cryo_brain_decoder",
+  "layers": {
+    "L1": {
+      "log_path": "/tmp/cryobrain-l1-e6717r92/reports/l1_lint.log",
+      "passed": true,
+      "skipped": false
+    },
+    "L2": {
+      "benchmark_failures": 0,
+      "benchmark_vectors": 64,
+      "log_path": "/tmp/cryobrain-rollout-ypswtb8e/rtl/cryo_brain_decoder.sv",
+      "passed": true,
+      "skipped": false
+    },
+    "L3": {
+      "log_path": "/tmp/cryobrain-l3-qx7oe4i9/reports/l3_formal.log",
+      "passed": true,
+      "skipped": false
+    },
+    "L4": {
+      "log_path": "/tmp/cryobrain-rollout-ypswtb8e/rtl/cryo_brain_decoder.yosys.log",
+      "passed": true,
+      "skipped": false
+    },
+    "L5": {
+      "log_path": "",
+      "passed": true,
+      "skipped": false
+    }
+  },
+  "layers_passed": [
+    "L1",
+    "L2",
+    "L3",
+    "L4",
+    "L5"
+  ],
+  "rtl_path": "/tmp/cryobrain-rollout-ypswtb8e/rtl/cryo_brain_decoder.sv",
+  "source": "measured"
+}

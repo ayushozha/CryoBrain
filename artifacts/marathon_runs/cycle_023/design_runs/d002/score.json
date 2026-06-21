@@ -1,0 +1,51 @@
+{
+  "design_id": "d002",
+  "reward": 0.9952975,
+  "valid": true,
+  "ler": 0.0,
+  "area_um2": 6.0,
+  "latency_cycles": 2,
+  "power_mw": 0.048,
+  "layers_passed": [
+    "L1",
+    "L2",
+    "L4",
+    "L5"
+  ],
+  "hard_caps": [],
+  "mwpm_ler": 0.179,
+  "suppression": 1.0,
+  "latency_component": 0.96875,
+  "area_component": 0.9999,
+  "design": {
+    "bitwidth": 4,
+    "num_layers": 2,
+    "parallelism": 4,
+    "pipeline_depth": 8,
+    "window_length": 8
+  },
+  "measurement": {
+    "candidate_ler": 0.0,
+    "mwpm_ler": 0.179,
+    "suppression": 1.0,
+    "shots": 1000,
+    "vector_source": "Stim surface_code:rotated_memory_z detector samples",
+    "rtl_path": "/tmp/cryobrain-rollout-1ya2kvn0/rtl/cryo_brain_decoder.sv",
+    "benchmark_vectors": 64,
+    "benchmark_failures": 0,
+    "rtl_valid": true
+  },
+  "synth": {
+    "area_um2": 6.0,
+    "latency_cycles": 2,
+    "power_mw_est": 0.048,
+    "valid": true,
+    "yosys_log_path": "/tmp/cryobrain-rollout-1ya2kvn0/rtl/cryo_brain_decoder.yosys.log",
+    "cell_count": 4
+  },
+  "l1_log": "/tmp/cryobrain-l1-s5vjriay/reports/l1_lint.log",
+  "l3_log": "/tmp/cryobrain-l3-b4av0ubu/reports/l3_formal.log",
+  "l4_log": "/tmp/cryobrain-rollout-1ya2kvn0/rtl/cryo_brain_decoder.yosys.log",
+  "source": "measured",
+  "source_design_id": "d005"
+}

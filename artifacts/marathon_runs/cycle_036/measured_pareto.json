@@ -1,0 +1,246 @@
+{
+  "accuracy_axis": "measured LER (Verilator)",
+  "hardware_axis": "Yosys area (\u00b5m\u00b2) \u2014 lower is cheaper",
+  "frontier_axes": [
+    "ler",
+    "area_um2"
+  ],
+  "count": 26,
+  "frontier_count": 22,
+  "points": [
+    {
+      "label": "cryo_brain_decoder@239eb2ca",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 8,
+      "rtl_path": "/tmp/cryobrain-rollout-slxpsmho/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "239eb2ca81561e4df273f2c0fba404a23e02996440087465b0e807f8a735ae2d",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@90f8381a",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-kolb6osc/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "90f8381a7b91ad697299be3b80d7bec7acd8d3871d1de9ec167aac8124a952fe",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@802a9052",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-p3mg4dyh/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "802a905218341ffff8cddcfb8c2bf9dc9c2e0df23c941e9a5d6b67172acf4dcc",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@4a1079be",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-p3ntbyt_/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "4a1079be89e6ad6fd2af2f57b2df7b27a73cc5794dd0734d65445a0cd648364f",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@b3515887",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-9ppqmzr0/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "b3515887550c269a69cb91debb03bb7463539595a1dd4536a1cad016c689bbac",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@6e48dc18",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-9o_feupw/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "6e48dc18601033d75c55c5e201f79c53b4b8f45b0bc60236bda2ce931827285f",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@e7e35c97",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-lf02_wh3/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "e7e35c970babbd0288c9fadd96c4357d9ef859132ba5617b7fc106ac33dbb0c2",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@663e0151",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-szqpeyx7/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "663e0151ae1cfa4100e3f009a98ce298f14bf9041b0d413cc729a811b5357a08",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@8ba2613d",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-urb5v6cu/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "8ba2613d5ed2846df7bc370743ee9a5d558920945d827946180fc175f36f2365",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@58ada166",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-0alf22v0/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "58ada16642be77238a1a794d96bc4ef9d7af9eeea2a8ca0808c0dbd822972c44",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@3a54878c",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 8,
+      "rtl_path": "/tmp/cryobrain-rollout-j0c4nasx/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "3a54878c2a5292b4b8ad59d5cbd9b53e4168d7238ae29ccd6c54d393f0dcacfa",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@a5862db3",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-uot1e2ks/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "a5862db35b4bf7bedfe5c0801ae7946c5adcafc9081844015a3af780a8af29e4",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@a9528ae8",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 4,
+      "rtl_path": "/tmp/cryobrain-rollout-e1y7sqx3/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "a9528ae8c1eebdb17da004bbf589c0aa50f2bb89182eb44974ba2234184f2367",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@1c60853d",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-gutqcri7/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "1c60853dfc5cf123c7b8db772e004cbe60014b3d85259b522a12dc0c28819e4c",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@bb81e0d7",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 4,
+      "rtl_path": "/tmp/cryobrain-rollout-wy09zj_1/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "bb81e0d7e6c038b90cd12bd237eb4b8122b1437df2bc7f6b57cf713c20e3d797",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@1685eb4d",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-6edhxdax/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "1685eb4dec07c791dc6464df3898c9892c0d447db85677128264af02b70bf0f4",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@775d726b",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-6h8dwvj9/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "775d726bb3c6a5fc8368460c6107c6f2f11c7ebe24b6f89c2a7805dbb1ab5a5c",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@6b4bb65b",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-9j0axa0x/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "6b4bb65bb79a621c9479bfbba0e1d326589b24416d5b4c548466211c0a7bfe2b",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@ced9b69d",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-6hc60080/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "ced9b69d3b7a868c9bbf0d45c6db6fa20f5f7352d8494a7c327fafe295895b43",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@ec7d2311",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-5kqlfndn/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "ec7d2311a6fab9955c001fca09850d4112d7960b09263dd1fc7d79f9b1019591",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@aab323ce",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-lu5ey_9l/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "aab323ce1bce47d15a6c9ba8d2f8e9d65ca24a8aa496782552f222e177927499",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@8a550fc0",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-5zm_nask/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "8a550fc0e097f6883dcf1c38271f5a38fce19ac0a8f2359b24c908b51e660a64",
+      "on_frontier": true
+    },
+    {
+      "label": "stream_arb_fifo@05e937c4",
+      "ler": 0.90625,
+      "area_um2": 16.0,
+      "latency_cycles": 64,
+      "rtl_path": "/tmp/cryobrain-fifo-vda50k7e/stream_arb_fifo.sv",
+      "rtl_hash": "05e937c4ac7b4bf318111d51c9c92fef8bc7169d2934ec513a5eeb9b68053640",
+      "on_frontier": false
+    },
+    {
+      "label": "stream_arb_fifo@fbf0e393",
+      "ler": 0.6875,
+      "area_um2": 64.0,
+      "latency_cycles": 64,
+      "rtl_path": "/tmp/cryobrain-fifo-1hg9tifm/stream_arb_fifo.sv",
+      "rtl_hash": "fbf0e393adf4b88f0649ef44ab5e2a210d69f45b4a963dfb8f7bcaac8c74d8cd",
+      "on_frontier": false
+    },
+    {
+      "label": "stream_arb_fifo@0907eae4",
+      "ler": 0.5625,
+      "area_um2": 256.0,
+      "latency_cycles": 64,
+      "rtl_path": "/tmp/cryobrain-fifo-nplsenn9/stream_arb_fifo.sv",
+      "rtl_hash": "0907eae4f7d0d8807bc59b13cef5425552e0d9c65a92cf3630d115d733ea0e71",
+      "on_frontier": false
+    },
+    {
+      "label": "stream_arb_fifo@1656e58e",
+      "ler": 0.5625,
+      "area_um2": 512.0,
+      "latency_cycles": 64,
+      "rtl_path": "/tmp/cryobrain-fifo-9vuen7qb/stream_arb_fifo.sv",
+      "rtl_hash": "1656e58e1feca9ae1ce45b1658d536dd572ead4de784ba72f259b7820522f0a2",
+      "on_frontier": false
+    }
+  ]
+}

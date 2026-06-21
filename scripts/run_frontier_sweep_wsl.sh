@@ -8,8 +8,9 @@ export PATH="${OSS_BIN}:${HOME}/.local/bin:${PATH}"
 
 cd "${REPO}"
 export UV_PROJECT_ENVIRONMENT="${REPO}/.venv-linux"
-uv sync
+uv sync --extra rl --extra sponsors
 export PATH="${UV_PROJECT_ENVIRONMENT}/bin:${PATH}"
+PYTHON="${UV_PROJECT_ENVIRONMENT}/bin/python"
 
 if [[ -f .env ]]; then
   set -a
@@ -19,12 +20,12 @@ if [[ -f .env ]]; then
 fi
 
 echo "=== C3 frontier sweep (L2-safe variants -> memory store) ==="
-uv run python -m cryobrain.benchmark.frontier_sweep
+"${PYTHON}" -m cryobrain.benchmark.frontier_sweep
 
 echo "=== C3 measured Pareto ==="
-uv run python -m cryobrain.benchmark.pareto --emit "${REPO}/artifacts/measured_pareto.json"
+"${PYTHON}" -m cryobrain.benchmark.pareto --emit "${REPO}/artifacts/measured_pareto.json"
 
-uv run python - "${REPO}/artifacts/measured_pareto.json" <<'PY'
+"${PYTHON}" - "${REPO}/artifacts/measured_pareto.json" <<'PY'
 import json, sys
 data = json.loads(open(sys.argv[1], encoding="utf-8").read())
 assert data["count"] >= 2, f"C3 needs 2+ measured points, got {data['count']}"

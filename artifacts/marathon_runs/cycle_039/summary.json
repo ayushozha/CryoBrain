@@ -1,0 +1,262 @@
+{
+  "cycle": 39,
+  "started_at": "2026-06-21T16:14:45.508845+00:00",
+  "finished_at": "2026-06-21T16:19:21.316434+00:00",
+  "steps": 2,
+  "seed": 3900,
+  "artifact_dir": "artifacts/marathon_runs/cycle_039",
+  "decoder": {
+    "path": "artifacts/measured_climb.json",
+    "accepted": 1,
+    "metric": "suppression",
+    "start": 1.0,
+    "end": 1.0,
+    "delta": 0.0,
+    "reward_source": "score_measured"
+  },
+  "fifo": {
+    "path": "artifacts/measured_fifo_climb.json",
+    "accepted": 2,
+    "metric": "throughput",
+    "start": 0.09375,
+    "end": 0.3125,
+    "delta": 0.21875,
+    "reward_source": "measured_fifo_throughput"
+  },
+  "memory_ab": {
+    "with": 2,
+    "without": 2,
+    "with_end_reward": 1.0,
+    "without_end_reward": 1.0,
+    "with_slope": 0.0,
+    "without_slope": 0.0,
+    "endpoint_delta": 0.0,
+    "slope_delta": 0.0,
+    "memory_wins": false,
+    "status": "memory_parity"
+  },
+  "planner": {
+    "path": "artifacts/planner_climb.json",
+    "accepted": 1,
+    "metric": "suppression",
+    "start": 1.0,
+    "end": 1.0,
+    "delta": 0.0,
+    "reward_source": "score_measured"
+  },
+  "sponsors": {
+    "fireworks": true,
+    "modal_measure": true,
+    "exa_research": true
+  },
+  "sponsor_evidence": {
+    "required_core_sponsors": {
+      "hud": true,
+      "exa": true,
+      "fireworks": true,
+      "modal": true
+    },
+    "exa": {
+      "live_gate": true,
+      "hit_count": 2,
+      "urls": [
+        "https://arxiv.org/html/2605.04892v1",
+        "https://iopscience.iop.org/article/10.1088/2058-9565/adc3ba"
+      ],
+      "titles": [
+        "Real-time Surface-Code Error Correction Using an FPGA-based Neural-Network Decoder",
+        "A memristive neural decoder for cryogenic fault-tolerant quantum error correction - IOPscience"
+      ]
+    },
+    "fireworks": {
+      "live_gate": true,
+      "proposer_enabled": true
+    },
+    "modal": {
+      "live_gate": true,
+      "measure_enabled": true,
+      "backend": "modal+stim+verilator+yosys"
+    },
+    "hud": {
+      "live_gate": true
+    }
+  },
+  "step_logs": {
+    "decoder": [
+      {
+        "step": 0,
+        "design": {
+          "bitwidth": 8,
+          "num_layers": 7,
+          "parallelism": 4,
+          "pipeline_depth": 12,
+          "window_length": 32
+        },
+        "reward": 0.99295375,
+        "candidate_ler": 0.0,
+        "suppression": 1.0,
+        "valid": true,
+        "accepted": true,
+        "recorded": true,
+        "layers_passed": [
+          "L1",
+          "L2",
+          "L4",
+          "L5"
+        ],
+        "rtl_hash": "e4a2fb027c7709ebeb08c2a0bbe969ba85aadfeda36d0fc29a0f27183b2697f1"
+      },
+      {
+        "step": 1,
+        "design": {
+          "bitwidth": 8,
+          "num_layers": 7,
+          "parallelism": 2,
+          "pipeline_depth": 10,
+          "window_length": 32
+        },
+        "reward": 0.99061,
+        "candidate_ler": 0.0,
+        "suppression": 1.0,
+        "valid": true,
+        "accepted": false,
+        "recorded": true,
+        "layers_passed": [
+          "L1",
+          "L2",
+          "L4",
+          "L5"
+        ],
+        "rtl_hash": "da5057982e6b27ede043599992ede1120746baed685c711e747fbf91dbb87d52"
+      }
+    ],
+    "fifo": [
+      {
+        "step": 0,
+        "design": {
+          "depth": 2,
+          "width": 8
+        },
+        "reward": 0.09375,
+        "throughput": 0.09375,
+        "suppression": 0.046875,
+        "valid": true,
+        "accepted": true,
+        "recorded": true,
+        "rtl_hash": "05e937c4ac7b4bf318111d51c9c92fef8bc7169d2934ec513a5eeb9b68053640"
+      },
+      {
+        "step": 1,
+        "design": {
+          "depth": 8,
+          "width": 8
+        },
+        "reward": 0.3125,
+        "throughput": 0.3125,
+        "suppression": 0.265625,
+        "valid": true,
+        "accepted": true,
+        "recorded": true,
+        "rtl_hash": "fbf0e393adf4b88f0649ef44ab5e2a210d69f45b4a963dfb8f7bcaac8c74d8cd"
+      }
+    ],
+    "planner": [
+      {
+        "step": 0,
+        "plan": {
+          "step": 0,
+          "design_id": "d000",
+          "knob": "bitwidth",
+          "base_design": {
+            "bitwidth": 4,
+            "num_layers": 5,
+            "parallelism": 2,
+            "pipeline_depth": 8,
+            "window_length": 24
+          },
+          "direction": "explore",
+          "seed": 3947,
+          "climb_steps": 0
+        },
+        "design": {
+          "bitwidth": 8,
+          "num_layers": 5,
+          "parallelism": 2,
+          "pipeline_depth": 8,
+          "window_length": 24
+        },
+        "reward": 0.9952975,
+        "candidate_ler": 0.0,
+        "suppression": 1.0,
+        "planner_reward": 1.0,
+        "valid": true,
+        "accepted": true,
+        "recorded": true,
+        "layers_passed": [
+          "L1",
+          "L2",
+          "L4",
+          "L5"
+        ],
+        "rtl_hash": "7ff18c1a2de0f7603dc31c0e518c2fef7fc9fbefe59cef4da0cd5e764a6f0aba"
+      },
+      {
+        "step": 1,
+        "plan": {
+          "step": 1,
+          "design_id": "d001",
+          "knob": "bitwidth",
+          "base_design": {
+            "bitwidth": 4,
+            "num_layers": 5,
+            "parallelism": 2,
+            "pipeline_depth": 8,
+            "window_length": 24
+          },
+          "direction": "exploit",
+          "seed": 3947,
+          "climb_steps": 1
+        },
+        "design": {
+          "bitwidth": 8,
+          "num_layers": 5,
+          "parallelism": 2,
+          "pipeline_depth": 8,
+          "window_length": 24
+        },
+        "reward": 0.9952975,
+        "candidate_ler": 0.0,
+        "suppression": 1.0,
+        "planner_reward": 0.0,
+        "valid": true,
+        "accepted": false,
+        "recorded": true,
+        "layers_passed": [
+          "L1",
+          "L2",
+          "L4",
+          "L5"
+        ],
+        "rtl_hash": "7ff18c1a2de0f7603dc31c0e518c2fef7fc9fbefe59cef4da0cd5e764a6f0aba"
+      }
+    ]
+  },
+  "decoder_memory_records": 38,
+  "fifo_memory_records": 6,
+  "decoder_attempted_this_run": 2,
+  "decoder_accepted_this_run": 1,
+  "fifo_attempted_this_run": 2,
+  "fifo_accepted_this_run": 2,
+  "planner_attempted_this_run": 2,
+  "planner_accepted_this_run": 1,
+  "artifact_files": {
+    "measured_climb.json": "artifacts/marathon_runs/cycle_039/measured_climb.json",
+    "measured_fifo_climb.json": "artifacts/marathon_runs/cycle_039/measured_fifo_climb.json",
+    "measured_memory_ab.json": "artifacts/marathon_runs/cycle_039/measured_memory_ab.json",
+    "measured_pareto.json": "artifacts/marathon_runs/cycle_039/measured_pareto.json",
+    "planner_climb.json": "artifacts/marathon_runs/cycle_039/planner_climb.json",
+    "verification_report.json": "artifacts/marathon_runs/cycle_039/verification_report.json",
+    "design_runs": "artifacts/marathon_runs/cycle_039/design_runs",
+    "summary": "artifacts/marathon_runs/cycle_039/summary.json"
+  }
+}
