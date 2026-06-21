@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-06-21T05:03:01+00:00",
+  "generated_by": "scripts/compute_ler_baselines_wsl.sh",
+  "git": {
+    "sha": "96252ed06ba5c6fbca3c17cfdaf6e8ae1db151c6",
+    "branch": "feat/v5-x9-baselines-research",
+    "dirty": true
+  },
+  "stim_manifest": {
+    "path": "tasks/cryo_brain_decoder/stim/manifest.json",
+    "version": 1,
+    "checksum": "3d1e7c7e9cf2e2e9",
+    "sha256": "be8f3394242765942924f08ab2f6367a028b0bd89c6c5dec04e995c5c2921c46"
+  },
+  "source": {
+    "kind": "mwpm_stim",
+    "proxy_free": true,
+    "decoder": "pymatching.Matching.from_stim_circuit",
+    "sampler": "stim.CompiledDetectorSampler(seed=manifest split seed)"
+  },
+  "toolchain": {
+    "python": "3.12.3",
+    "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "stim": "1.16.0",
+    "pymatching": "2.4.0"
+  },
+  "reproducibility": {
+    "epsilon_abs": 0.02306179677301836,
+    "epsilon_source": "max per-split 1.96 * sqrt(p * (1 - p) / shots)",
+    "deterministic_sampling": true
+  },
+  "baselines": [
+    {
+      "split": "train",
+      "decoder": "mwpm",
+      "circuit": "stim.Circuit.generated(surface_code:rotated_memory_z)",
+      "scenario": {
+        "distance": 3,
+        "noise_rate": 0.02,
+        "shots": 1000,
+        "rounds": 3
+      },
+      "seed": 1729,
+      "manifest_vectors": 64,
+      "shots": 1000,
+      "logical_errors": 161,
+      "logical_error_rate": 0.161,
+      "standard_error": 0.011622349160131096,
+      "epsilon_95": 0.022779804353856948
+    },
+    {
+      "split": "holdout",
+      "decoder": "mwpm",
+      "circuit": "stim.Circuit.generated(surface_code:rotated_memory_z)",
+      "scenario": {
+        "distance": 3,
+        "noise_rate": 0.02,
+        "shots": 1000,
+        "rounds": 3
+      },
+      "seed": 4242,
+      "manifest_vectors": 64,
+      "shots": 1000,
+      "logical_errors": 166,
+      "logical_error_rate": 0.166,
+      "standard_error": 0.011766222843376714,
+      "epsilon_95": 0.02306179677301836
+    }
+  ]
+}
