@@ -1,8 +1,8 @@
 # CryoBrain — Progress Summary
 
-**Last updated:** 2026-06-20
+**Last updated:** 2026-06-21
 **Repo:** https://github.com/ayushozha/CryoBrain
-**Branch:** `main` (published)
+**Branch:** `main` only (all feature branches merged and deleted)
 **Canonical spec:** [`docs/specs/SPEC-v5.md`](specs/SPEC-v5.md)
 **Reality audit:** [`SPEC_REALITY_AUDIT.md`](SPEC_REALITY_AUDIT.md)
 **Agent orchestration:** [`docs/agents/README.md`](agents/README.md)
@@ -19,7 +19,7 @@ CryoBrain is a **measured** verifiable RL environment for cryogenic QEC decoder 
 4. **L1–L5** — Verification stack gates every score.
 5. **GEN** — Same env on a second RTL target (FIFO) for platform proof.
 
-**Keystone rule:** worse RTL → worse measured LER. No `decoder_quality_multiplier` in production paths.
+**Keystone rule:** worse RTL → worse measured LER. No proxy formula LER in production paths.
 
 ---
 
@@ -28,17 +28,18 @@ CryoBrain is a **measured** verifiable RL environment for cryogenic QEC decoder 
 | Area | Status | Notes |
 |------|--------|-------|
 | **SPEC-v5 measured spine (Grok)** | **MP0–MP2 green** | `measure_candidate_ler`, `synth_metrics`, `score_measured` |
-| **Proxy LER** | **Removed** | `decoder_policy.py` deleted; CI guards in place |
-| **Parametric RTL** | **Skeleton + MP1** | `cryobrain/rtl_gen/generator.py` — 3 presets → distinct area+LER |
-| **Verification layers** | **L1, L4, L5 landed** | L3 formal (Codex) pending for MP5 |
-| **Learning loop (Claude)** | **Not on measured path yet** | `local_trainer.py` still knob-sweep era |
-| **Measured artifacts (demo)** | **Not regenerated** | No `measured_*.json` yet — see artifact table below |
-| **Demo dashboard** | **Offline shell green** | `build_demo.py` bundles proxy-era climb/memory into `demo/index.html` (~46 KB) |
-| **GitHub** | **Published** | `ayushozha/CryoBrain` public, `main` pushed |
-| **HUD / sponsors** | **Scaffolded** | CP0 green; Fireworks/Exa/Daytona/Modal wired, not full measured loop |
-| **Tests** | **108 pytest** | Includes MP0–MP2 keystone, proxy guards, artifact schemas |
+| **Proxy LER** | **Removed + guarded** | `decoder_policy.py` deleted; `audit_reward_path.sh` + pytest guards on `main` |
+| **Parametric RTL** | **MP1 green** | `cryobrain/rtl_gen/generator.py` — 3 presets → distinct area + LER |
+| **Verification layers** | **L1, L4, L5 landed** | L3 formal (Codex X3) + verification report (X7) pending for MP5 |
+| **Learning loop (Claude)** | **Code on `main`** | Measured `local_trainer.py`, memory store, GRPO, Modal fan-out — **WSL artifact run pending** |
+| **Measured artifacts** | **Not checked in** | No `measured_climb.json` / `measured_memory_ab.json` / `measured_pareto.json` on disk yet |
+| **Demo dashboard** | **Offline shell green** | Still bundles **proxy-era** climb/memory JSON — truth-up blocked on measured artifacts |
+| **GEN (FIFO)** | **Code landed** | `tasks/async_fifo/`, `fifo_generator.py`, `run_gen_fifo_wsl.sh` |
+| **GitHub** | **Single-branch** | `ayushozha/CryoBrain` · PRs #1–#17 merged · only `main` remains |
+| **HUD / sponsors** | **Integrated** | Fireworks proposer, Exa context pack, Daytona sandbox, Modal measure, HUD smoke |
+| **Tests** | **207 pytest** | +99 since last doc; Claude + Codex suites on `main` |
 
-**Overall (SPEC-v5 definition of done): ~40%** — measured spine through MP2 + offline demo shell; measured trainer, measured artifacts, and MP5 remain.
+**Overall (SPEC-v5 definition of done): ~65%** — measured spine + full Claude/Codex code paths on `main`; WSL artifact generation, demo truth-up, and MP5 formal layer remain.
 
 ---
 
@@ -49,116 +50,111 @@ CryoBrain is a **measured** verifiable RL environment for cryogenic QEC decoder 
 | **MP0** | Worse `.sv` → worse measured LER | **Green (WSL)** | `wsl bash scripts/run_mp0_wsl.sh` |
 | **MP1** | 3 configs → 3 distinct (area, LER) | **Green (WSL)** | `wsl bash scripts/run_mp1_wsl.sh` |
 | **MP2** | Reward only on measured change | **Green (WSL)** | `wsl bash scripts/run_mp2_wsl.sh` |
-| **MP3** | Measured climb (not proxy) | **Not started** | Needs Claude C5 trainer on `score_measured` |
-| **MP4** | Memory A/B on measured runs | **Not started** | Needs measured trainer + `measured_memory_ab.json` |
-| **MP5** | L1–L5 all gate score | **Partial** | L1/L4/L5 in `score_measured`; L3 formal + `test_l3_formal.py` pending |
-| **CP0** | HUD eval green | **Green (WSL)** | [HUD job](https://hud.ai/jobs/d5e730a977f04df59875afd1f3c022ba) |
-| **GEN** | FIFO second target | **Not started** | Claude C9 / scaffold only |
+| **MP3** | Measured climb (not proxy) | **Code green · artifact pending** | `local_trainer.py` + `run_c5_climb_wsl.sh`; no `measured_climb.json` yet |
+| **MP4** | Memory A/B on measured runs | **Code green · artifact pending** | Trainer emits `measured_memory_ab.json`; not generated on disk |
+| **MP5** | L1–L5 all gate score | **Partial** | L1/L4/L5 in `score_measured`; `test_l3_formal.py` + `test_verification_report.py` missing |
+| **CP0** | HUD eval smoke | **Green (unit)** | `tests/test_hud_eval_smoke.py`; full live `hud eval` gated on MP3 run |
+| **GEN** | FIFO second target | **Code landed** | `tests/test_gen_fifo.py`, `scripts/run_gen_fifo_wsl.sh` |
 
 ---
 
-## What landed in the measured engine (Grok, MP0–MP2)
+## Agent pools — what's on `main`
 
-### P0 — measured accuracy
+### Grok (G1–G10) — measured engine
 
-| Component | Path |
-|-----------|------|
-| Keystone API | `cryobrain/accuracy/measured_ler.py` |
-| Types | `cryobrain/accuracy/types.py` |
-| Stim manifest | `cryobrain/stim/manifest.py`, `tasks/cryo_brain_decoder/stim/` |
-| Tests | `tests/test_keystone_rule.py`, `tests/test_measured_ler.py` |
-| Gate | `scripts/run_mp0_wsl.sh` |
+| Component | Path | Status |
+|-----------|------|--------|
+| Keystone API | `cryobrain/accuracy/measured_ler.py` | Landed |
+| RTL generator | `cryobrain/rtl_gen/generator.py` | Landed |
+| Yosys metrics | `cryobrain/rtl_grader/synth_metrics.py` | Landed |
+| L1 / L4 / L5 gates | `cryobrain/verify/l1_functional.py`, `l4_synth.py`, `l5_budget.py` | Landed |
+| Score API | `cryobrain/grader/score.py` → `score_measured()` | Landed |
+| Gates | `scripts/run_mp0_wsl.sh` … `run_mp2_wsl.sh` | WSL-green |
 
-### P1 — RTL + per-variant synth
+### Claude (C1–C10) — learning + sponsors + GEN
 
-| Component | Path |
-|-----------|------|
-| RTL generator | `cryobrain/rtl_gen/generator.py` |
-| DesignConfig space | `cryobrain/design/config.py`, `validators.py` |
-| Yosys metrics | `cryobrain/rtl_grader/synth_metrics.py` |
-| Staging helper | `cryobrain/rtl_grader/stage.py` |
-| L1 / L4 / L5 gates | `cryobrain/verify/l1_functional.py`, `l4_synth.py`, `l5_budget.py` |
-| Gate | `scripts/run_mp1_wsl.sh` |
+| ID | Deliverable | Path | Status |
+|----|-------------|------|--------|
+| **C1** | Measured memory store | `cryobrain/memory/store.py`, `models.py` | **Merged** (PR #9) |
+| **C2** | Fireworks proposer | `cryobrain/rl/proposer.py`, `integrations/fireworks.py` | **Merged** (PR #9) |
+| **C3** | Modal measure fan-out | `cryobrain/rl/modal_measure.py`, `modal_app.py` | **Merged** (PR #13) |
+| **C4** | GRPO on measured reward | `cryobrain/rl/grpo.py`, `rollout.py` | **Merged** (PR #14) |
+| **C5** | Measured local trainer | `cryobrain/rl/local_trainer.py`, `proposal_loop.py` | **Merged** (PR #9) |
+| **C6** | Exa retrieval + context pack | `cryobrain/retrieval/context_pack.py` | **Merged** (PR #10) |
+| **C7** | Daytona per-variant sandbox | `cryobrain/sandbox/measure_runner.py` | **Merged** (PR #11) |
+| **C8** | HUD eval smoke | `tests/test_hud_eval_smoke.py` | **Merged** (PR #12) |
+| **C9** | FIFO GEN second target | `tasks/async_fifo/`, `cryobrain/rtl_gen/fifo_generator.py` | **Merged** (PR #16) |
+| **C10** | Measured Pareto + plots | `cryobrain/benchmark/pareto.py`, `plots.py` | **Merged** (PR #15) |
 
-### P2 — measured grading
+### Codex (X1–X10) — truth enforcement
 
-| Component | Path |
-|-----------|------|
-| Score API | `cryobrain/grader/score.py` → `score_measured()` |
-| Hidden grader | `tasks/cryo_brain_decoder/donotaccess/grade.py` (imports `score_measured` only) |
-| Proxy kill + CI | `tests/test_no_proxy_ler_in_prod.py`, `scripts/audit_reward_path.sh` |
-| Gate | `scripts/run_mp2_wsl.sh` |
+| ID | Deliverable | Status |
+|----|-------------|--------|
+| **X1** | Proxy killer | **Done** — `tests/test_proxy_removed.py` |
+| **X2** | CI anti-cheat guards | **Done** — `audit_reward_path.sh`, `test_no_proxy_ler_in_prod.py` |
+| **X3** | SymbiYosys L3 formal | **Not started** — no `l3_formal.py` / `test_l3_formal.py` |
+| **X4** | Keystone pytest | **Done** — `test_keystone_rule.py` (WSL) |
+| **X5** | Artifact schema v2 | **Done** — `cryobrain/artifacts/schemas/v2/` |
+| **X6** | Stim harness tests | **Done** — `cryobrain/stim/compare.py` + tests |
+| **X7** | Verification report | **Not started** — no `verification_report.py` |
+| **X8** | WSL runners | **Partial** — mp0/mp1/mp2 green; `run_mp5_wsl.sh` blocked on X3+X7 |
+| **X9** | LER baselines + research | **Done** — `artifacts/baselines/ler_baselines.json`, `ECC_DECODER_METRICS.md` |
+| **X10** | Integration gate | **Landed** — `tests/integration/test_measured_pipeline.py`; WSL acceptance needs re-verify |
 
-### Interface contract
-
-Frozen APIs documented in [`docs/agents/INTERFACE_CONTRACTS.md`](agents/INTERFACE_CONTRACTS.md).
+**Codex completion: 7/10 done, 1 partial (X8), 2 not started (X3, X7).**
 
 ---
 
-## Architecture (updated for v5)
+## Architecture (v5, post-consolidation)
 
-| Layer | What it is | Artifact (today) |
-|-------|------------|------------------|
-| **The chip** | Parametric synthesizable Verilog per `DesignConfig` | `cryobrain/rtl_gen/generator.py` → `.sv` |
+| Layer | What it is | Key paths |
+|-------|------------|-----------|
+| **The chip** | Parametric synthesizable Verilog per `DesignConfig` | `cryobrain/rtl_gen/generator.py` |
 | **The environment** | Measured grader: Verilator LER + Yosys + L1/L4/L5 | `cryobrain/grader/score.py`, hidden `grade.py` |
-| **The AI** | RL loop + memory + sponsors (needs measured rewire) | `local_trainer.py`, `modal_train.py` |
+| **The AI** | Measured propose → generate → verify → measure → score → memory | `proposal_loop.py`, `local_trainer.py`, `memory/store.py` |
+| **Training scale** | Modal fan-out + GRPO on measured reward | `modal_measure.py`, `grpo.py` |
+| **Sponsors** | Fireworks proposer, Exa RAG, Daytona sandbox | `proposer.py`, `context_pack.py`, `measure_runner.py` |
+| **GEN** | FIFO second RTL target in same env | `tasks/async_fifo/`, `fifo_loop.py` |
 | **The demo** | Offline dashboard from JSON bundle | `scripts/build_demo.py` → `demo/index.html` |
 
+Frozen APIs: [`docs/agents/INTERFACE_CONTRACTS.md`](agents/INTERFACE_CONTRACTS.md).
+
 ---
 
-## Recent session wins (2026-06-20)
+## Recent session wins (2026-06-21)
 
 | Done | Detail |
 |------|--------|
-| **SPEC-v5 docs** | Versioned specs, 30-agent handoffs, reality audit, interface contracts |
-| **Grok MP0–MP2** | Measured LER spine, parametric RTL, `score_measured` grading — all WSL-green |
-| **Proxy elimination** | `decoder_policy.py` removed; `stim_harness.py` fail-closed to MWPM only |
-| **GitHub publish** | `ayushozha/CryoBrain` public on `main` |
-| **Demo dashboard shell** | `dashboard.template.html` + `build_demo.py` → offline `demo/index.html` (~46 KB) |
-| **VCD → waveform** | `cryobrain/demo/vcd_export.py` exports 5 signals from golden trace |
-| **Memory A/B refresh** | WSL re-ran `climb_chart_no_memory.json` / `climb_chart_memory.json` / overlay |
-| **Legacy CP gates** | CP2/CP3/CP5/CP6/CP7 green in WSL; grade.py wired to real Stim MWPM LER |
+| **Branch consolidation** | PRs #5–#17 merged; all feature branches deleted; `main` is the only branch |
+| **Claude C1–C10** | Memory, measured trainer, Fireworks, Modal, GRPO, Exa, Daytona, HUD smoke, Pareto, FIFO GEN |
+| **Codex X4/X6/X9/X10** | Keystone WSL marker, stim compare, LER baselines, integration gate (PRs #1–#4) |
+| **Proxy guard fix** | PR #17 — docstring cleanup after merge; guards green again |
+| **Test suite growth** | 108 → **207** collected tests |
+| **`.gitignore`** | `terminals/` scratch dir ignored (PR #5) |
+
+### Prior session (2026-06-20)
+
+| Done | Detail |
+|------|--------|
+| **Grok MP0–MP2** | Measured LER spine, parametric RTL, `score_measured` — WSL-green |
+| **Proxy elimination** | `decoder_policy.py` removed; stim harness fail-closed to MWPM |
+| **SPEC-v5 docs** | Versioned specs, 30-agent handoffs, reality audit |
+| **Demo dashboard shell** | Offline `demo/index.html` (~46 KB) from proxy-era artifacts |
 
 ---
 
-## Legacy era (SPEC v1–v4) — still in repo, not the demo story
+## Legacy era (SPEC v1–v4)
 
-Before SPEC-v5, the repo shipped a **knob-sweep trainer** against a **static** `cryo_brain_decoder.sv` with **proxy** candidate LER (`decoder_policy.py`). That produced real-looking climb/memory JSON but was **not** measured co-design. See [`SPEC_REALITY_AUDIT.md`](SPEC_REALITY_AUDIT.md).
-
-### Historical checkpoints (proxy era — WSL green)
+Before SPEC-v5, the repo shipped a **knob-sweep trainer** with **proxy** candidate LER. That produced real-looking climb/memory JSON but was not measured co-design. Legacy artifacts remain on disk for the demo; see [`SPEC_REALITY_AUDIT.md`](SPEC_REALITY_AUDIT.md).
 
 | CP | Meaning | Status | Caveat for v5 |
 |----|---------|--------|---------------|
 | CP0 | HUD eval FIFO | Green | Still valid |
 | CP1 | Stim MWPM harness | Green | Still valid |
-| CP2 | Validity gate | Green | Now superseded by `score_measured` layers |
-| CP3 | Calibration band | Green | Pre-measured reward band |
+| CP2–CP3 | Validity / calibration | Green | Superseded by measured layers |
 | CP4 | RL climb | Green | **Proxy-era** — not MP3 |
 | CP5 | Memory A/B | Green | **Proxy-era** — not MP4 |
-| CP6 | Curriculum d=3→5→7 | Green | Curriculum code exists |
-| CP7/CP8 | Waveform / FIFO fallback | Green | Still valid |
-
-> Repo script naming: `check_cp5.py` = waveform/synth (SPEC2 CP7); `check_cp7.py` = FIFO (SPEC2 CP8); `check_cp5_memory.py` = memory A/B.
-
----
-
-## Phase: Documentation & orchestration
-
-| Deliverable | Status |
-|-------------|--------|
-| Versioned specs (`docs/specs/`) | Done — **SPEC-v5 canonical** |
-| Multi-agent handoffs (30 agents) | Done — Grok / Claude / Codex |
-| `SPEC_REALITY_AUDIT.md` | Done — spec vs gimmick gap |
-| `INTERFACE_CONTRACTS.md` | Done — frozen APIs |
-| GitHub `ayushozha/CryoBrain` | Done — public, `main` |
-
-**Kickoff one-liners for agents:**
-
-```
-Read docs/agents/HANDOFF-GROK.md and execute it.
-Read docs/agents/HANDOFF-CLAUDE.md and execute it.
-Read docs/agents/HANDOFF-CODEX.md and execute it.
-```
+| CP6–CP8 | Curriculum / waveform / FIFO | Green | FIFO scaffold extended by C9 GEN |
 
 ---
 
@@ -168,28 +164,27 @@ Read docs/agents/HANDOFF-CODEX.md and execute it.
 |-----------|------|--------|
 | Template | `demo/dashboard.template.html` | Done |
 | Bundle builder | `scripts/build_demo.py` | Green — reads `artifacts/*.json` |
-| VCD export | `cryobrain/demo/vcd_export.py` | Green — 5 signals from golden trace |
-| Offline HTML | `demo/index.html` | Built (~46 KB, no server needed) |
-| Bundle JSON | `artifacts/demo_bundle.json` | Generated |
+| VCD export | `cryobrain/demo/vcd_export.py` | Green |
+| Offline HTML | `demo/index.html` | Built (~46 KB) |
 
-**Honesty caveat:** `build_demo.py` still sources `climb_chart_rl.json`, `memory_ab_overlay.json`, and `designs.json` — all **proxy-era**. The dashboard renders correctly but does **not** yet read `measured_*.json`. Truth-up is blocked on MP3/MP4 artifacts.
+**Honesty caveat:** `build_demo.py` still sources proxy-era `climb_chart_rl.json`, `memory_ab_overlay.json`, `designs.json`. Truth-up requires running `run_c5_climb_wsl.sh` and pointing the builder at `measured_*.json`.
 
 ```bash
-python scripts/build_demo.py          # rebuild demo/index.html from artifacts/
-# open demo/index.html in browser — fully offline
+python scripts/build_demo.py
+# open demo/index.html — fully offline
 ```
 
 ---
 
-## Phase: Sponsors (scaffold — not yet on measured loop)
+## Phase: Sponsors (integrated on `main`)
 
 | Sponsor | Module | Status |
 |---------|--------|--------|
-| **HUD** | `env.py`, `grader.py` | CP0 green; decoder task needs measured eval refresh |
-| **Modal** | `modal_train.py` | Image ready; no measured GRPO run yet |
-| **Fireworks** | `integrations/fireworks.py` | API hook; not driving RTL proposals in trainer |
-| **Exa** | `integrations/exa_rag.py` | Works; seeded proxy-era memory tags |
-| **Daytona** | `integrations/daytona.py` | Scaffold |
+| **HUD** | `env.py`, `tests/test_hud_eval_smoke.py` | Smoke green; full eval needs WSL measured climb |
+| **Modal** | `cryobrain/rl/modal_measure.py`, `modal_app.py` | Fan-out code landed; live run needs Modal creds |
+| **Fireworks** | `cryobrain/rl/proposer.py` | Proposer wired; `--fireworks` flag on trainer |
+| **Exa** | `cryobrain/retrieval/context_pack.py` | Search + provenance pack; live test skips without key |
+| **Daytona** | `cryobrain/sandbox/measure_runner.py` | Per-variant sandbox measure scaffold |
 | **Antim Gizmo** | `integrations/antim.py` | Optional concept visual only |
 
 Health: `python scripts/check_sponsors.py` · Keys in `.env` (gitignored).
@@ -198,47 +193,42 @@ Health: `python scripts/check_sponsors.py` · Keys in `.env` (gitignored).
 
 ## Artifacts
 
-### On disk today (local `artifacts/` — mostly proxy-era)
+### On disk today
 
-| File | Size | Era | Used by demo? |
-|------|------|-----|---------------|
-| `climb_chart_rl.json` | ~10 KB | Proxy | Yes (climb panel) |
-| `climb_chart_no_memory.json` | ~10 KB | Proxy | Yes (memory A/B) |
-| `climb_chart_memory.json` | ~10 KB | Proxy | Yes (memory A/B) |
-| `memory_ab_overlay.json` | ~0.4 KB | Proxy | Yes (memory summary) |
-| `designs.json` / `designs_rl.json` | ~3–5 KB | Proxy | Yes (pareto panel) |
-| `pareto.json` / `pareto.png` | ~3–89 KB | Proxy | Indirect |
-| `waveform.json` | ~19 KB | Real VCD | Yes (waveform panel) |
-| `demo_bundle.json` | ~38 KB | Bundled | Source for `index.html` |
-| `cryo_golden_trace.vcd` | ~6 KB | Real sim | VCD source |
-| `verified_memory.json` | ~18 KB | Proxy-era tags | No (trainer memory) |
+| File | Era | Used by demo? |
+|------|-----|---------------|
+| `climb_chart_*.json`, `designs*.json`, `memory_ab_overlay.json` | Proxy | Yes |
+| `pareto.json` / `pareto.png` | Proxy | Indirect |
+| `waveform.json`, `cryo_golden_trace.vcd` | Real sim | Yes |
+| `demo_bundle.json` | Bundled | Source for `index.html` |
+| `verified_memory.json` | Proxy-era tags | Trainer seed only |
+| `baselines/ler_baselines.json` | **Measured** | Regression guard (Codex X9) |
 
-### SPEC-v5 target (not yet generated)
+### SPEC-v5 target (generate via WSL)
 
-| File | Panel / use |
-|------|-------------|
-| `artifacts/measured_climb.json` | Demo climb (MP3) |
-| `artifacts/measured_memory_ab.json` | Memory A/B (MP4) |
-| `artifacts/measured_pareto.json` | Pareto (real Yosys area) |
-| `artifacts/invalid_vs_valid.json` | Honesty flash (wrong → reward 0) |
+| File | Gate | Generator |
+|------|------|-----------|
+| `artifacts/measured_climb.json` | MP3 | `wsl bash scripts/run_c5_climb_wsl.sh` |
+| `artifacts/measured_memory_ab.json` | MP4 | `local_trainer.py --memory-ab` (WSL) |
+| `artifacts/measured_pareto.json` | MP4+ | `cryobrain/benchmark/pareto.py` |
+| `artifacts/verification_report.json` | MP5 | Codex X7 (not started) |
 
-Schema validation: `cryobrain/artifacts/schemas/v2/` (Codex X5).
+Schema validation: `cryobrain/artifacts/schemas/v2/`.
 
 ---
 
 ## Git history (recent)
 
 ```
-2c3bada chore: proxy removal, artifact schemas, README links for GitHub publish
-328243a feat: Grok MP2 score_measured rewires grade off proxy (G10)
-d8660da feat: Grok MP1 synth metrics, verify layers, parametric RTL (G4-G8)
-a64efb8 feat: Grok MP0 measured LER spine (G1-G4, G9, G3)
-e51aa97 docs: SPEC-v5 archive and 30-agent orchestration handoffs
-88c3d5c docs: spec vs reality audit
-3cee7e2 feat: offline live demo dashboard (WS7)
+79490b3 fix: restore proxy guards after Claude branch consolidation (#17)
+fc4032c feat: FIFO GEN second target (#16)
+c0bbac3 feat: measured trainer + memory + Fireworks proposer (#9)
+c94de11 test: measured LER baselines (#1)
+328243a feat: Grok MP2 score_measured (G10)
+a64efb8 feat: Grok MP0 measured LER spine (G3)
 ```
 
-**Remote:** `git@github.com:ayushozha/CryoBrain.git` · default branch `main`
+**Remote:** `git@github.com:ayushozha/CryoBrain.git` · default branch `main` · no open PRs
 
 ---
 
@@ -246,20 +236,28 @@ e51aa97 docs: SPEC-v5 archive and 30-agent orchestration handoffs
 
 ```bash
 # Measured milestones (WSL + OSS CAD required)
-wsl bash scripts/run_mp0_wsl.sh   # MP0 keystone
-wsl bash scripts/run_mp1_wsl.sh   # MP1 synth + variants
-wsl bash scripts/run_mp2_wsl.sh   # MP2 score_measured + proxy guard
+wsl bash scripts/run_mp0_wsl.sh
+wsl bash scripts/run_mp1_wsl.sh
+wsl bash scripts/run_mp2_wsl.sh
+
+# Claude measured climb + artifacts (MP3/MP4)
+wsl bash scripts/run_c5_climb_wsl.sh 5
+
+# Codex baselines
+wsl bash scripts/compute_ler_baselines_wsl.sh
+
+# GEN FIFO (C9)
+wsl bash scripts/run_gen_fifo_wsl.sh
+
+# MP5 (blocked until Codex X3 + X7 land)
+wsl bash scripts/run_mp5_wsl.sh
 
 # Demo dashboard (Windows or WSL)
-python scripts/build_demo.py      # rebuild offline demo/index.html
+python scripts/build_demo.py
 
-# Legacy checkpoints (still useful)
-wsl bash scripts/run_cp0_wsl.sh
-wsl bash scripts/run_cp4_wsl.sh --steps 12   # proxy-era climb — not MP3
-wsl bash scripts/run_memory_ab_wsl.sh        # proxy-era memory A/B
-
-# Tests + sponsors
-uv run pytest                     # 108 tests
+# Tests
+uv run pytest -m "not wsl"    # fast unit suite (Windows)
+uv run pytest                 # 207 tests (WSL tests need -m wsl + EDA)
 python scripts/check_sponsors.py
 ```
 
@@ -269,17 +267,18 @@ See [`docs/EDA_WSL.md`](EDA_WSL.md) for toolchain setup.
 
 ## What's next (priority order)
 
-1. **Claude C5** — Rewire `local_trainer.py` to `generate_rtl` → `score_measured` → memory; emit `measured_climb.json` (**MP3**).
-2. **Claude C5/C10** — Measured memory A/B + pareto artifacts (**MP4**).
-3. **Demo truth-up** — Point `build_demo.py` at `measured_*.json` only; show "awaiting artifact" when missing.
-4. **Codex X3** — SymbiYosys L3 in `layers_passed` + `test_l3_formal.py` (**MP5**).
-5. **Claude C3/C4** — Modal + Fireworks GRPO on measured reward.
-6. **Claude C9** — FIFO GEN platform proof.
+1. **WSL artifact run** — `run_c5_climb_wsl.sh` → check in `measured_climb.json` + `measured_memory_ab.json` (**MP3/MP4 proof**).
+2. **Demo truth-up** — Point `build_demo.py` at `measured_*.json`; show placeholder when missing.
+3. **Codex X3** — SymbiYosys L3 formal (`l3_formal.py`, `test_l3_formal.py`).
+4. **Codex X7** — `verification_report.json` generator + tests.
+5. **Codex X8** — `run_mp5_wsl.sh` full L1–L5 gate once X3+X7 land.
+6. **Live sponsor runs** — Modal GRPO + Fireworks proposer on a real measured climb.
+7. **GEN WSL proof** — `run_gen_fifo_wsl.sh` green on golden FIFO RTL.
 
 ---
 
 ## One-line status
 
-**CryoBrain** has a **real measured spine** (MP0–MP2): Verilator LER, per-variant Yosys, and `score_measured` grading with proxy LER dead. An **offline demo dashboard** renders proxy-era climb/memory/waveform artifacts honestly labeled as pre-MP3. The **demo-ready measured story** still needs a **measured trainer run** (MP3/MP4) and dashboard truth-up.
+**CryoBrain** has a **full measured stack on `main`**: Grok MP0–MP2 green, Claude C1–C10 code merged, Codex guards/schemas/baselines landed. The **demo-ready measured story** still needs a **WSL climb run** to produce `measured_*.json`, plus **demo truth-up** and **Codex L3 formal** for MP5.
 
-**Claim ladder tonight:** candidate accuracy is **measured**; each design is **real synthesizable RTL**; the offline dashboard **works** but climb/memory panels are **not yet measured**; learning climb and memory wins are **not claimable** until MP3/MP4 artifacts exist.
+**Claim ladder:** candidate accuracy is **measured** (proven MP0); each design is **real synthesizable RTL** (MP1); reward is **measured-only** (MP2); learning climb and memory wins are **code-complete but not yet artifact-proven** (MP3/MP4); the offline dashboard **works** but climb/memory panels are still **proxy-era data**.
