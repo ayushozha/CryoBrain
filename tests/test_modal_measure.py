@@ -54,10 +54,11 @@ def _rtl_files(tmp_path: Path, n: int) -> list[Path]:
 
 
 @pytest.fixture
-def no_modal_creds(monkeypatch):
+def no_modal_creds(monkeypatch, tmp_path):
     """Force the local fallback: no Modal tokens => measure_batch runs locally."""
     monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
     monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
+    monkeypatch.setattr(modal_measure.Path, "home", lambda: tmp_path)
 
 
 def _patch_stage(monkeypatch):
@@ -200,6 +201,26 @@ def test_modal_score_fn_swaps_into_measured_reward(tmp_path, monkeypatch, no_mod
     assert reward == 0.55
     assert score["suppression"] == 0.33
     assert Path(rtl_path).is_file()  # real generated RTL drove the fan-out
+
+
+def test_modal_payloads_send_rtl_source_and_reject_hidden_paths(tmp_path):
+    rtl = _rtl_files(tmp_path, 1)[0]
+    payload = modal_measure._modal_payloads([rtl], {"distance": 3}, shots=7, seed=11)[0]
+    assert payload["rtl_path"] == str(rtl.resolve())
+    assert payload["rtl_source"].startswith("// variant 0")
+
+    hidden = tmp_path / "tasks" / "cryo_brain_decoder" / "donotaccess" / "solution.sv"
+    hidden.parent.mkdir(parents=True)
+    hidden.write_text("module secret; endmodule\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="hidden task material"):
+        modal_measure._modal_payloads([hidden], {"distance": 3}, shots=7, seed=11)
+
+
+def test_modal_source_filter_excludes_donotaccess():
+    from cryobrain.rl import modal_app
+
+    assert modal_app._modal_source_ignore(Path("tasks/cryo_brain_decoder/donotaccess/solution.sv"))
+    assert not modal_app._modal_source_ignore(Path("tasks/cryo_brain_decoder/prompt.md"))
 
 
 def test_modules_import_on_windows():

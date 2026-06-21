@@ -35,7 +35,7 @@ module cryo_brain_decoder_formal_top;
     localparam int CORRECTION_WIDTH = 4;
     localparam int CONFIDENCE_WIDTH = 8;
 
-    logic clk;
+    (* gclk *) logic clk;
     logic rst_n;
     (* anyseq *) logic syndromes_valid;
     (* anyseq *) logic [SYNDROME_WIDTH-1:0] syndromes;
@@ -44,11 +44,9 @@ module cryo_brain_decoder_formal_top;
     logic [CONFIDENCE_WIDTH-1:0] confidence;
 
     initial begin
-        clk = 1'b0;
         rst_n = 1'b0;
     end
 
-    always #5 clk = ~clk;
     always @(posedge clk) rst_n <= 1'b1;
 
     cryo_brain_decoder #(

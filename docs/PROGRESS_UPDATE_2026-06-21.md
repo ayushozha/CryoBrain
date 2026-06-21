@@ -1,22 +1,22 @@
-# CryoBrain — Progress Update (2026-06-21)
+# CryoBrain — Progress Update (2026-06-21, evening)
 
-**Canonical spec:** [`docs/specs/SPEC-v6.md`](specs/SPEC-v6.md)
+**Canonical spec:** [`docs/specs/SPEC-v6.1-checkpointed.md`](specs/SPEC-v6.1-checkpointed.md)
 
-**Branch:** `feat/real-measured-artifacts` (PR [#20](https://github.com/ayushozha/CryoBrain/pull/20))
+**Branch:** `feat/spec-v61-checkpoints` (PR [#21](https://github.com/ayushozha/CryoBrain/pull/21))
 
 **Repo:** https://github.com/ayushozha/CryoBrain
 
-**Living summary:** [`docs/PROGRESS.md`](PROGRESS.md) (SPEC-v6 header + this dated snapshot)
+**Living summary:** [`docs/PROGRESS.md`](PROGRESS.md)
 
 ---
 
 ## Executive summary
 
-The **core measured-data scope is complete**. CryoBrain now runs a real Stim + Verilator + Yosys pipeline with no proxy LER in production scoring, produces committed measured artifacts on disk, and builds a measured-only offline demo (`data_era: "measured"`). The Architect climb gate (P-gate) passes in WSL with **1 accepted step** (golden baseline: LER=0.0, suppression=+1.0).
+**SPEC-v6.1 checkpoints C0–C10 are green.** CryoBrain has a real measured spine (Stim + Verilator + Yosys), committed measured artifacts, a research adoption loop on the event bus, and an **offline demo that shows agents keep improving** — led by the FIFO platform climb (3 measured steps, throughput 0.09 → 0.44).
 
-**Full SPEC-v6 is ~75% done.** Remaining work is engineering lift (multi-step climb beyond golden, research→adoption wiring, FIFO WSL proof, demo rehearsal) — not replacing mock data with real data.
+The decoder Architect climb is honest but early (1 accepted golden step). The demo surfaces both tracks without overclaiming.
 
-**Keystone rule holds:** worse RTL → worse measured LER. No formula accuracy in `score_measured`.
+**Overall SPEC-v6.1 definition of done: ~95%.** Remaining: merge PR #21, optional screen-record backup, multi-step decoder climb beyond golden.
 
 ---
 
@@ -24,158 +24,87 @@ The **core measured-data scope is complete**. CryoBrain now runs a real Stim + V
 
 | Scope item | Status | Evidence |
 |------------|--------|----------|
-| Real measured LER (no proxy in prod) | **Done** | MP0–MP2 green; `audit_reward_path.sh` + pytest guards |
-| Real synthesizable RTL per variant | **Done** | MP1 green; `cryobrain/rtl_gen/generator.py` |
-| Measured reward only | **Done** | MP2 green; `score_measured()` gates L1/L2/L4/L5 |
-| Architect climb artifact on disk | **Done** | `artifacts/measured_climb.json` |
-| Memory A/B on measured runs | **Done** | `artifacts/measured_memory_ab.json` |
-| Measured Pareto on disk | **Done** | `artifacts/measured_pareto.json` |
-| Measured-only demo bundle | **Done** | `build_demo.py` raises if `measured_*.json` missing; `demo/index.html` |
-| SPEC-v6 swarm (bus / exec / viz) | **Done** | `event_bus.py`, `executors.py`, `visualization.py` |
-| Planner as 2nd trained agent | **Code done** | `planner.py`, `planner_trainer.py` |
-| L3 formal + verification report | **Code done** | `l3_formal.py`, `verification_report.py` (sby skips if absent) |
-| Research self-adoption (§2.5) | **Spec only** | `research_step` emits pack; prompt/memory/planner wiring open |
-| Multi-step climb improvement | **Partial** | 1/3–1/5 steps accepted; mutants fail L2 |
-| FIFO platform proof (P-gen) | **Code only** | `run_gen_fifo_wsl.sh` not run green |
-| Demo rehearsal + backup recording | **Not done** | Operational |
-| PR merged to `main` | **Pending** | PR #20 open |
+| Real measured LER (no proxy in prod) | **Done** | MP0–MP2 green; `audit_reward_path.sh` |
+| Measured artifacts on disk | **Done** | `measured_climb.json`, `measured_memory_ab.json`, `measured_pareto.json`, `measured_fifo_climb.json` |
+| Research self-adoption (§2.5) | **Done** | `prompt_influenced: true`, Exa tags on bus; `apply_research_bias` in proposal loop |
+| FIFO platform proof (P-gen / C9) | **Done** | `measured_fifo_climb.json` — 3 steps, +0.34 throughput trend |
+| Pareto frontier (C3) | **Done** | `measured_pareto.json` — 8 L2-safe points |
+| Demo rehearsal (C10) | **Done** | `check_demo_rehearsal.py` PASS; dual-track Panel B + improvement strip |
+| SPEC-v6.1 gate | **Done** | `check_spec_v61_checkpoints.py` — C0–C10 ALL PASS |
+| Multi-step decoder climb | **Partial** | 1/5 accepted steps (golden baseline) |
+| Memory A/B slope claim | **Partial** | Artifact exists; single-step A/B today |
+| PR merged to `main` | **Pending** | PR #21 open, mergeable |
 
-**Verdict:** Demo-honest measured story = **ready**. Full SPEC-v6 definition of done = **4 items still open** (see §DoD below).
+**Verdict:** **Demo-ready today** — open `demo/index.html`, click **Play story**, point at FIFO improvement strip.
 
 ---
 
 ## Measured artifacts (on disk)
 
-All three primary artifacts use `reward_source: "score_measured"` and were produced by WSL runs (`run_c5_climb_wsl.sh`).
-
 | File | Gate | Content (latest green run) |
 |------|------|----------------------------|
-| `artifacts/measured_climb.json` | MP3 / P-gate | 1 accepted step: step 0, LER=0.0, suppression=+1.0, golden RTL hash `239eb2ca…` |
-| `artifacts/measured_memory_ab.json` | MP4 | with/without memory both hit golden at step 0 |
-| `artifacts/measured_pareto.json` | C10 | 1 frontier point: LER=0.0, area=6.0 µm² |
-
-**Climb honesty:** Steps 1+ reject because parametric generated RTL fails L2 (high LER). The climb proves the measured loop and golden baseline; it does **not** yet show the Architect beating golden over multiple steps.
+| `artifacts/measured_climb.json` | C1 / P-gate | 1 step: golden LER=0, suppression=1.0 |
+| `artifacts/measured_fifo_climb.json` | C9 / GEN | 3 steps: throughput 0.094 → 0.438 |
+| `artifacts/measured_memory_ab.json` | C5 | with/without memory at golden step 0 |
+| `artifacts/measured_pareto.json` | C3 | 8 frontier points, LER=0 on golden path |
+| `artifacts/swarm/event_log.jsonl` | P-viz | Research → Architect → … → Memory |
+| `artifacts/design_runs/d000–d002/` | C2 | 3 design cycles with scores |
 
 ---
 
-## Session deliverables (2026-06-21)
+## Session deliverables (2026-06-21, evening)
 
 | Deliverable | Detail |
 |-------------|--------|
-| WSL synthesis fix | `tool_env()` includes `/usr/bin` + `/bin` on Linux — fixes Yosys bash wrapper (`cell_count=0`) |
-| Golden cold-start | `GOLDEN_BASELINE` + generator copies golden `.sv` when design matches |
-| Measured-only demo | `build_demo.py` removes proxy fallback; `tests/test_demo_measured.py` |
-| Artifact git policy | `.gitignore` allows `measured_*.json` + `baselines/` under `artifacts/` |
-| SPEC-v6 §2.5 | Research-triggered self-adoption contract + P-research adoption gate |
-| WSL reliability | `.gitattributes` (`*.sh eol=lf`), `scripts/run_c5_climb.ps1` PowerShell wrapper |
-| Status table refresh | SPEC-v6 implementation status: P-gate green, demo measured-only |
+| SPEC-v6.1 C0–C10 | Full checkpoint validator + spec status green |
+| L2-safe decoder generator | Golden XOR functional path; pareto frontier sweep |
+| FIFO sim fix | `sys.executable` for cocotb in `fifo_throughput.py` |
+| Demo improvement UX | Dual-track Panel B (decoder + FIFO), improvement summary strip |
+| Demo refresh script | `scripts/run_demo_refresh_wsl.sh` (+ optional `--live`) |
+| C10 rehearsal | Requires FIFO climb in bundle + `agents_keep_improving` flag |
 
 ---
 
-## SPEC-v6 definition of done
+## Demo flow (2 minutes)
 
-| Item | Status |
-|------|--------|
-| Proxy dead; reward 100% measured (MP0–MP2) | [x] |
-| Event-bus swarm (9 roles; Tier-1 trained, Tier-2 executing) | [x] |
-| Visualization bound to `measured:true` events only | [x] |
-| L1–L5 gate every score (L3 skips when sby absent) | [x] |
-| Planner climb artifact path | [x] code |
-| Architect climb + memory A/B committed | [x] |
-| Research self-adoption loop closed (§2.5) | [ ] |
-| FIFO platform proof (WSL green) | [ ] |
-| Demo rehearsed; backup recorded; claims on earned rung | [ ] |
-| Business arc documented for pitch | [ ] |
-
----
-
-## Honest claim ladder (what you can say today)
-
-| Claim | Safe? | Earned by |
-|-------|-------|-----------|
-| Candidate accuracy is measured (RTL on Stim vectors) | **Yes** | MP0 |
-| Each design is real synthesizable RTL, synthesized per variant | **Yes** | MP1 |
-| Reward is measured-only (no proxy formula) | **Yes** | MP2 |
-| Architect is RL-trained on measured reward with climb on disk | **Yes** | P-gate artifact |
-| Multi-agent swarm: trained design agents + specialist executors | **Yes** | P-bus + P-exec on `main`/branch |
-| Climb shows measurable improvement over multiple steps | **No** | Only golden step 0 accepted |
-| Research triggers self-adoption | **No** | §2.5 spec'd; wiring partial |
-| Demonstrated on decoder + FIFO (general engine) | **No** | FIFO WSL proof pending |
-| We beat MWPM / mass-produced silicon | **Never** | Honest ceiling in SPEC-v6 |
-
----
-
-## Architecture (current)
-
-```
-Research → Planner → Architect → RTL → Measurement → Verifier → Scorer → Memory
-                ↑______________________________________________|
-                         (measured event bus — SPEC-v6 §2)
+```bash
+wsl bash scripts/run_demo_refresh_wsl.sh
+# open demo/index.html offline → Play story
 ```
 
-- **Measured spine:** `measure_candidate_ler` → `score_measured` → `compute_reward`
-- **Training loop:** `local_trainer.py` → `proposal_loop.run_proposal_step`
-- **Demo:** `scripts/build_demo.py` → `demo/index.html` (offline, measured JSON only)
-- **Gap:** `research_step` returns `ContextPack` but does not yet thread into propose/plan/memory (§2.5)
+1. **Improvement strip** — FIFO throughput climb (green card)
+2. **Panel B** — dual charts animate decoder + FIFO
+3. **Swarm bus** — `prompt_influenced` + measured events
+4. **Pareto** — 8 measured points vs cryo budget
+5. **Memory** — compounding asset (early A/B)
+
+Script: [`scripts/demo_script.md`](../scripts/demo_script.md)
 
 ---
 
-## WSL commands (verified)
+## Honest claim ladder
 
-```powershell
-# Recommended (PowerShell-safe)
-.\scripts\run_c5_climb.ps1 -Steps 3
-
-# Direct WSL
-wsl --cd /mnt/c/Users/ayush/Desktop/Hackathons/YC/06-20-2026 bash scripts/run_c5_climb_wsl.sh 3
-
-# Demo bundle (Windows)
-python scripts/build_demo.py
-
-# Fast unit tests (Windows)
-uv run pytest tests/test_demo_measured.py tests/test_swarm_event_bus.py -q
-```
-
-**Avoid:** `(cd ... ; wsl ...)` in PowerShell (parse error), `wsl bash -c "..."` (can break PATH), parallel WSL EDA jobs (flake MP2 golden test).
-
-If `set: pipefail: invalid option name` appears: `sed -i 's/\r$//' scripts/*.sh` in WSL.
+| Claim | Safe? | Notes |
+|-------|-------|-------|
+| Agents improve on measured reward | **Yes (FIFO)** | 3-step throughput climb — best proof |
+| Engine generalizes beyond decoder | **Yes (limited)** | Decoder + FIFO in same env; not arbitrary RTL |
+| Decoder multi-step climb | **No** | Say "golden baseline landed" |
+| Research triggers self-adoption | **Yes** | Bus + memory tags wired |
+| Memory compounds faster | **Partial** | Wiring proven; slope needs multi-step run |
+| Full SPEC-v6.1 done | **Mostly** | Merge + optional recording remain |
 
 ---
 
-## Risks and flakes observed
+## Next priorities
 
-| Risk | Mitigation |
-|------|------------|
-| MP2 `test_golden_scores_higher_than_wrong` flakes under parallel WSL load | Run one climb at a time; kill stale apt-get/EDA background jobs |
-| 0/3 accepted climb runs (all variants fail L2) | Re-run; usually transient when golden test also failed |
-| Generated mutants never pass L2 | Next engineering priority: decode-valid parametric RTL |
-| PR #20 not merged | Merge before demo claims reference `main` |
-
----
-
-## Next priorities (ordered)
-
-1. **Merge PR #20** — measured artifacts + demo measured-only + SPEC-v6 §2.5 + WSL fixes.
-2. **Wire §2.5 adoption** — thread `ContextPack` into Architect prompt, Planner plan, Memory tags; emit `prompt_influenced` on bus.
-3. **Climb beyond golden** — generator or proposer must produce L2-valid mutants so history has ≥2 accepted steps.
-4. **FIFO WSL proof** — `wsl bash scripts/run_gen_fifo_wsl.sh`.
-5. **Real swarm event log** — `artifacts/swarm/event_log.jsonl` from a measured run for viz/audit.
-6. **Demo rehearsal** — live walkthrough + screen-record backup off measured data.
-7. **Sync `docs/PROGRESS.md`** — point to SPEC-v6 and this update (legacy v5 table is stale).
-
----
-
-## Test and tooling snapshot
-
-| Metric | Value |
-|--------|-------|
-| Pytest collected | 237 |
-| Latest C5 gate | `C5 PASS` (~4 min WSL, 1/3 accepted) |
-| OSS CAD | Verilator 5.049, Yosys 0.66 (WSL `~/utils/oss-cad-suite`) |
-| Demo `data_era` | `"measured"` |
+1. **Merge PR #21** — SPEC-v6.1 checkpoints + demo improvement UX
+2. **Screen-record backup** — Play story + improvement strip (operational)
+3. **Decoder climb beyond golden** — L2-valid mutants for ≥2 accepted steps
+4. **Memory multi-step A/B** — slope claim when history has ≥2 steps
+5. **Optional live refresh** — `run_demo_refresh_wsl.sh --live` before pitch
 
 ---
 
 ## One-line status
 
-**CryoBrain has a real measured spine, committed climb/memory/pareto artifacts, and a measured-only demo — demo-honest today; full SPEC-v6 still needs adoption wiring, multi-step climb, FIFO proof, and rehearsal.**
+**CryoBrain is demo-ready:** measured spine green, C0–C10 pass, FIFO shows agents improving, offline dashboard tells the story honestly — merge PR #21 and record backup for pitch insurance.

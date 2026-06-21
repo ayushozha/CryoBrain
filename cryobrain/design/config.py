@@ -30,24 +30,30 @@ def sample_random(rng: random.Random | None = None) -> DesignConfig:
     )
 
 
-def mutate(design: DesignConfig, rng: random.Random | None = None) -> DesignConfig:
-    rng = rng or random.Random()
-    field = rng.choice(["bitwidth", "num_layers", "parallelism", "pipeline_depth", "window_length"])
-    if field == "bitwidth":
-        return replace(design, bitwidth=rng.choice([2, 4, 8]))
-    if field == "num_layers":
-        return replace(design, num_layers=rng.randint(1, 4))
-    if field == "parallelism":
-        return replace(design, parallelism=rng.choice([1, 2, 4]))
-    if field == "pipeline_depth":
-        return replace(design, pipeline_depth=rng.choice([2, 4, 8]))
-    return replace(design, window_length=rng.choice([4, 8, 16]))
+def l2_safe_variants() -> list[DesignConfig]:
+    """L2-valid generated family: golden decode, distinct hardware tradeoffs."""
+    return [
+        GOLDEN_BASELINE,
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=1, pipeline_depth=2, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=1, pipeline_depth=4, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=2, pipeline_depth=2, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=2, pipeline_depth=4, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=2, pipeline_depth=8, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=4, pipeline_depth=2, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=4, pipeline_depth=8, window_length=8),
+    ]
 
 
 def preset_variants() -> list[DesignConfig]:
-    """Three distinct configs for MP1 acceptance."""
-    return [
-        GOLDEN_BASELINE,
-        DesignConfig(bitwidth=8, num_layers=4, parallelism=2, pipeline_depth=4, window_length=16),
-        DesignConfig(bitwidth=2, num_layers=1, parallelism=1, pipeline_depth=8, window_length=4),
-    ]
+    """Distinct L2-safe configs for MP1 / frontier sweep."""
+    return l2_safe_variants()
+
+
+def mutate(design: DesignConfig, rng: random.Random | None = None) -> DesignConfig:
+    rng = rng or random.Random()
+    field = rng.choice(["parallelism", "pipeline_depth", "window_length"])
+    if field == "parallelism":
+        return replace(design, parallelism=rng.choice([1, 2, 4]))
+    if field == "pipeline_depth":
+        return replace(design, pipeline_depth=rng.choice([1, 2, 4, 8]))
+    return replace(design, window_length=rng.choice([4, 8, 16]))

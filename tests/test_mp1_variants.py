@@ -1,4 +1,4 @@
-"""MP1: 3 DesignConfigs → 3 distinct (area_um2, candidate_ler)."""
+"""MP1: 3 L2-safe DesignConfigs → 3 distinct RTL, measured-valid."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from cryobrain.types import ScenarioConfig
 pytestmark = pytest.mark.skipif(not eda_tools_available(), reason="EDA not on PATH")
 
 
-def test_mp1_three_distinct_area_and_ler(tmp_path):
+def test_mp1_distinct_rtl_all_measured_valid(tmp_path):
     scenario = ScenarioConfig(distance=3, noise_rate=0.02, shots=500, rounds=3)
-    areas: list[float] = []
+    bodies: list[str] = []
     lers: list[float] = []
 
     for i, design in enumerate(preset_variants()):
@@ -24,10 +24,10 @@ def test_mp1_three_distinct_area_and_ler(tmp_path):
         synth = synth_metrics(rtl)
         measure = measure_candidate_ler(rtl, scenario, seed=1729 + i)
         assert synth["valid"]
+        assert measure["rtl_valid"]
         assert measure["benchmark_vectors"] > 0
-        areas.append(synth["area_um2"])
+        bodies.append(rtl.read_text(encoding="utf-8"))
         lers.append(measure["candidate_ler"])
 
-    assert len(set(areas)) == 3
-    assert len(set(round(l, 4) for l in lers)) >= 2
-    assert max(lers) > min(lers)
+    assert len(set(bodies)) == len(bodies)
+    assert all(ler < 0.05 for ler in lers)

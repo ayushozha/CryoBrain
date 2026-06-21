@@ -137,9 +137,11 @@ def _run_sim(
     traffic_json.write_text(json.dumps(to_vector_rows(traffic)), encoding="utf-8")
     report = rtl_path.parent / "fifo_throughput.json"
 
+    import sys
+
     proc = run_cmd(
         [
-            "python3",
+            sys.executable,
             str(runner),
             "--rtl",
             str(rtl_path),

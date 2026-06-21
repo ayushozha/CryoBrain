@@ -249,6 +249,62 @@
       color: var(--text-dim);
       margin-top: 4px;
     }
+    #improvement-strip {
+      display: none;
+      border-top: 1px solid var(--border);
+      background: rgba(61, 214, 245, 0.04);
+      padding: 8px 24px 10px;
+    }
+    #improvement-strip.visible { display: block; }
+    #improvement-strip h3 {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    #improvement-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+    #improvement-cards .card {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      min-width: 200px;
+    }
+    #improvement-cards .card.improving {
+      border-color: var(--green);
+      color: var(--green);
+    }
+    #improvement-cards .card.baseline {
+      border-color: var(--cyan-dim);
+      color: var(--text-dim);
+    }
+    .dual-climb {
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      height: 100%;
+      gap: 4px;
+    }
+    .dual-climb .lane {
+      position: relative;
+      min-height: 0;
+    }
+    .dual-climb .lane-label {
+      position: absolute;
+      top: 2px;
+      left: 4px;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-dim);
+      z-index: 1;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -277,10 +333,15 @@
 
     <section class="panel" id="panel-b" data-panel="climb">
       <div class="panel-head">
-        <h2>Panel B — Climb</h2>
-        <span class="tagline">It improves (the spine)</span>
+        <h2>Panel B — Improvement</h2>
+        <span class="tagline">Agents keep climbing — decoder + FIFO</span>
       </div>
-      <div class="panel-body" id="body-b"></div>
+      <div class="panel-body" id="body-b">
+        <div class="dual-climb" id="dual-climb">
+          <div class="lane" id="lane-decoder"><span class="lane-label">decoder (QEC)</span></div>
+          <div class="lane" id="lane-fifo"><span class="lane-label">FIFO platform</span></div>
+        </div>
+      </div>
       <div class="panel-foot">
         <span class="source" id="source-b"></span>
         <button class="replay" data-replay="climb">Replay</button>
@@ -313,6 +374,11 @@
       </div>
     </section>
   </main>
+
+  <section id="improvement-strip" aria-label="Measured improvement summary">
+    <h3>Agents keep improving (measured)</h3>
+    <div id="improvement-cards"></div>
+  </section>
 
   <section id="swarm-strip" aria-label="Swarm bus timeline">
     <h3>Swarm bus</h3>
@@ -422,44 +488,52 @@
       }, 180);
     }
 
-    /* ── Panel B: Climb ── */
-    function drawClimb(animate = false) {
-      const climb = DATA.climb;
-      const body = $("#body-b");
-      if (!climb?.history?.length) { showAwaiting(body); return; }
+    /* ── Panel B: Dual improvement tracks ── */
+    function drawClimbLane(container, series, opts = {}) {
+      const { animate = false, color = "#3dd6f5", metricLabel = "reward", valueFn = (h) => h.reward } = opts;
+      if (!container) return Promise.resolve();
+      if (!series?.history?.length) {
+        container.querySelector("svg")?.remove();
+        container.insertAdjacentHTML("beforeend", '<div class="awaiting" style="height:100%">awaiting artifact</div>');
+        return Promise.resolve();
+      }
+      container.querySelector(".awaiting")?.remove();
 
-      const hist = climb.history.map((h) => ({ step: h.step, reward: h.reward }));
-      const W = body.clientWidth || 600;
-      const H = body.clientHeight || 200;
-      const pad = { l: 44, r: 16, t: 20, b: 32 };
-      const rewards = hist.map((h) => h.reward);
-      const minR = Math.min(...rewards) * 0.98;
-      const maxR = Math.max(...rewards) * 1.02;
+      const hist = series.history.map((h) => ({ step: h.step, value: valueFn(h) }));
+      const W = container.clientWidth || 600;
+      const H = container.clientHeight || 96;
+      const pad = { l: 44, r: 16, t: 18, b: 22 };
+      const values = hist.map((h) => h.value);
+      const minR = Math.min(...values) * (Math.min(...values) > 0 ? 0.92 : 0.98);
+      const maxR = Math.max(...values) * 1.08;
       const range = Math.max(maxR - minR, 0.01);
-      const xScale = (step) => pad.l + (step / Math.max(hist[hist.length - 1].step, 1)) * (W - pad.l - pad.r);
+      const maxStep = Math.max(hist[hist.length - 1].step, 1);
+      const xScale = (step) => pad.l + (step / maxStep) * (W - pad.l - pad.r);
       const yScale = (r) => pad.t + (1 - (r - minR) / range) * (H - pad.t - pad.b);
 
       function render(count) {
         const slice = hist.slice(0, count);
         let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
-        for (let g = 0; g <= 4; g++) {
-          const y = pad.t + (g / 4) * (H - pad.t - pad.b);
-          const rv = maxR - (g / 4) * range;
+        for (let g = 0; g <= 3; g++) {
+          const y = pad.t + (g / 3) * (H - pad.t - pad.b);
+          const rv = maxR - (g / 3) * range;
           svg += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="#1a2535" stroke-width="0.5"/>`;
-          svg += `<text x="4" y="${y + 3}" fill="#5a6b7d" font-family="IBM Plex Mono" font-size="8">${mono(rv)}</text>`;
+          if (g === 0 || g === 3) {
+            svg += `<text x="4" y="${y + 3}" fill="#5a6b7d" font-family="IBM Plex Mono" font-size="7">${mono(rv)}</text>`;
+          }
         }
         if (slice.length > 1) {
-          const pts = slice.map((h) => `${xScale(h.step)},${yScale(h.reward)}`).join(" ");
-          svg += `<polyline points="${pts}" fill="none" stroke="#3dd6f5" stroke-width="2"/>`;
+          const pts = slice.map((h) => `${xScale(h.step)},${yScale(h.value)}`).join(" ");
+          svg += `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/>`;
         }
         const last = slice[slice.length - 1];
         if (last) {
-          svg += `<circle cx="${xScale(last.step)}" cy="${yScale(last.reward)}" r="4" fill="#3dff9a"/>`;
-          svg += `<text x="${pad.l}" y="${H - 8}" fill="#3dd6f5" font-family="IBM Plex Mono" font-size="10">reward ${mono(last.reward)} @ step ${last.step}</text>`;
+          svg += `<circle cx="${xScale(last.step)}" cy="${yScale(last.value)}" r="3.5" fill="${color}"/>`;
+          svg += `<text x="${pad.l}" y="${H - 4}" fill="${color}" font-family="IBM Plex Mono" font-size="9">${metricLabel} ${mono(last.value)} @ step ${last.step}</text>`;
         }
-        svg += `<text x="${W / 2}" y="14" text-anchor="middle" fill="#5a6b7d" font-size="9">improving from verified attempts</text>`;
         svg += "</svg>";
-        body.innerHTML = svg;
+        container.querySelector("svg")?.remove();
+        container.insertAdjacentHTML("beforeend", svg);
       }
 
       if (!animate) { render(hist.length); return Promise.resolve(); }
@@ -467,11 +541,50 @@
         let i = 1;
         const tick = () => {
           render(i);
-          if (i < hist.length) { i++; requestAnimationFrame(() => setTimeout(tick, 120)); }
+          if (i < hist.length) { i++; setTimeout(tick, 120); }
           else resolve();
         };
         tick();
       });
+    }
+
+    async function drawClimb(animate = false) {
+      const decoderLane = $("#lane-decoder");
+      const fifoLane = $("#lane-fifo");
+      const decoder = DATA.climb;
+      const fifo = DATA.fifo_climb;
+      if (!decoder?.history?.length && !fifo?.history?.length) {
+        showAwaiting($("#body-b"));
+        return;
+      }
+      await drawClimbLane(decoderLane, decoder, {
+        animate,
+        color: "#3dd6f5",
+        metricLabel: "suppression",
+        valueFn: (h) => h.reward,
+      });
+      await drawClimbLane(fifoLane, fifo, {
+        animate,
+        color: "#3dff9a",
+        metricLabel: "throughput",
+        valueFn: (h) => h.throughput ?? h.reward,
+      });
+    }
+
+    function renderImprovementStrip() {
+      const strip = $("#improvement-strip");
+      const cards = $("#improvement-cards");
+      const imp = DATA.improvement;
+      if (!strip || !cards || !imp?.tracks?.length) return;
+      cards.innerHTML = imp.tracks.map((t) => {
+        const cls = t.improving ? "improving" : "baseline";
+        const arrow = t.improving ? "↑" : "•";
+        return `<div class="card ${cls}">${arrow} ${t.target}: ${mono(t.start)} → ${mono(t.end)} (${t.metric}, ${t.steps} steps) — ${t.note || ""}</div>`;
+      }).join("");
+      if (imp.pareto_points) {
+        cards.insertAdjacentHTML("beforeend", `<div class="card baseline">pareto frontier: ${imp.pareto_points} measured points</div>`);
+      }
+      strip.classList.add("visible");
     }
 
     /* ── Panel C: Memory A/B ── */
@@ -700,6 +813,7 @@
       drawClimb(false);
       drawMemory(false);
       drawPareto(false);
+      renderImprovementStrip();
       renderSwarmTimeline();
 
       $("#play-story").addEventListener("click", playStory);
@@ -718,6 +832,7 @@
         drawClimb(false);
         drawMemory(false);
         drawPareto(false);
+        renderImprovementStrip();
       });
     }
 

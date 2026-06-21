@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -16,8 +17,10 @@ from cryobrain.integrations.exa_rag import search_decoder_literature
 from cryobrain.integrations.fireworks import propose_design_config
 from cryobrain.integrations.secrets import get_key
 
+CORE_SPONSORS = ("hud", "exa", "fireworks", "modal")
 
-def main() -> None:
+
+def build_report() -> dict[str, object]:
     report: dict[str, object] = {
         "hud": bool(get_key("HUD_API_KEY")),
         "exa": False,
@@ -49,8 +52,27 @@ def main() -> None:
     antim = request_concept_visual("CryoBrain NPU beside surface code qubits, technical diagram")
     report["antim"] = bool(antim.get("ok"))
 
+    return report
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--require-core",
+        action="store_true",
+        help="fail unless HUD, Exa, Fireworks, and Modal are available",
+    )
+    args = parser.parse_args(argv)
+
+    report = build_report()
     print(json.dumps(report, indent=2))
+    if args.require_core:
+        missing = [name for name in CORE_SPONSORS if not report.get(name)]
+        if missing:
+            print(f"missing required sponsor platform(s): {', '.join(missing)}", file=sys.stderr)
+            return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

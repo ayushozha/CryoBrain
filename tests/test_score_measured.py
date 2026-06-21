@@ -66,13 +66,14 @@ def test_golden_scores_higher_than_wrong():
 
 def test_reward_moves_with_measured_rtl_quality(tmp_path):
     good = generate_rtl(preset_variants()[0], tmp_path / "good")
-    bad = generate_rtl(preset_variants()[2], tmp_path / "bad")
     good_stage = _stage_task_with_rtl(good)
-    bad_stage = _stage_task_with_rtl(bad)
+    bad_stage = _stage_task_with_rtl(WRONG)
     good_score = score_measured(good_stage)
     bad_score = score_measured(bad_stage)
     assert good_score["ler"] < bad_score["ler"]
     assert good_score["reward"] >= bad_score["reward"]
+    assert good_score["valid"] is True
+    assert bad_score["valid"] is False
 
 
 def test_grade_module_uses_measured_path():

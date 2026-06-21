@@ -116,6 +116,7 @@ class Provenance(BaseModel):
 
     step: int
     backend: str = "verilator+stim+yosys"
+    tags: list[str] = Field(default_factory=list)
 
 
 class MemoryRecord(BaseModel):

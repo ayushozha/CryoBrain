@@ -191,9 +191,9 @@ def _build_modal_app():
     stays measured on Modal, exactly as on a local Linux box.
     """
     import modal
+    from cryobrain.rl.modal_app import add_project_sources
 
-    root = Path(__file__).resolve().parents[2]
-    image = (
+    image = add_project_sources(
         modal.Image.debian_slim(python_version="3.12")
         .apt_install("verilator", "yosys")
         .pip_install(
@@ -206,8 +206,6 @@ def _build_modal_app():
             "openai>=1.0",
             "python-dotenv>=1.0",
         )
-        .add_local_dir(root / "cryobrain", remote_path="/root/cryobrain")
-        .add_local_dir(root / "tasks" / "cryo_brain_decoder", remote_path="/root/tasks/cryo_brain_decoder")
     )
 
     app = modal.App(APP_NAME)
@@ -216,7 +214,8 @@ def _build_modal_app():
         image=image,
         gpu="T4",
         timeout=60 * 60,
-        secrets=[modal.Secret.from_name("cryobrain-modal", required=False)],
+        serialized=True,
+        **_modal_secret_kwargs(modal),
     )
     def grpo_remote(payload: dict[str, object]) -> dict[str, object]:
         """Run the GRPO measured climb on a Modal worker (real measure stack)."""
@@ -237,7 +236,8 @@ def _build_modal_app():
         image=image,
         gpu="T4",
         timeout=60 * 60,
-        secrets=[modal.Secret.from_name("cryobrain-modal", required=False)],
+        serialized=True,
+        **_modal_secret_kwargs(modal),
     )
     def train_remote(config_dict: dict[str, object]) -> dict[str, object]:
         """Legacy CP4 graded loop on a Modal worker (back-compat)."""
@@ -250,6 +250,17 @@ def _build_modal_app():
         return result
 
     return app, grpo_remote, train_remote
+
+
+def _modal_secret_kwargs(modal: Any) -> dict[str, Any]:
+    secret_name = os.environ.get("CRYOBRAIN_MODAL_SECRET")
+    if not secret_name:
+        return {}
+    try:
+        secret = modal.Secret.from_name(secret_name, required=True)
+    except TypeError:
+        secret = modal.Secret.from_name(secret_name)
+    return {"secrets": [secret]}
 
 
 def run_grpo(
@@ -392,19 +403,24 @@ def _register_modal_entrypoint():
     except Exception:
         return None
 
-    @app.local_entrypoint()
-    def modal_main(steps: int = 20, group_size: int = 6, seed: int = 0, lr: float = 0.1) -> None:
-        """`modal run` default: the GRPO measured climb on a worker."""
-        payload = grpo_remote.remote(
-            {"steps": steps, "group_size": group_size, "seed": seed, "lr": lr}
-        )
-        out = DEFAULT_GRPO_CLIMB
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(
-            json.dumps({k: payload[k] for k in ("backend", "reward_source", "steps", "history")}, indent=2),
-            encoding="utf-8",
-        )
-        print(json.dumps(payload, indent=2))
+    try:
+        local_entrypoint = app.local_entrypoint()
+
+        @local_entrypoint
+        def modal_main(steps: int = 20, group_size: int = 6, seed: int = 0, lr: float = 0.1) -> None:
+            """`modal run` default: the GRPO measured climb on a worker."""
+            payload = grpo_remote.remote(
+                {"steps": steps, "group_size": group_size, "seed": seed, "lr": lr}
+            )
+            out = DEFAULT_GRPO_CLIMB
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps({k: payload[k] for k in ("backend", "reward_source", "steps", "history")}, indent=2),
+                encoding="utf-8",
+            )
+            print(json.dumps(payload, indent=2))
+    except Exception:
+        return app
 
     return app
 

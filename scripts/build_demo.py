@@ -52,6 +52,7 @@ def _normalize_measured_climb(measured: dict) -> dict:
         if isinstance(row, dict) and "step" in row and "suppression" in row
     ]
     out: dict = {
+        "target": measured.get("target", "cryo_brain_decoder"),
         "backend": measured.get("backend", "measured"),
         "reward_source": measured.get("reward_source", "score_measured"),
         "history": history,
@@ -60,8 +61,88 @@ def _normalize_measured_climb(measured: dict) -> dict:
         out["summary"] = {
             "start_reward": history[0]["reward"],
             "end_reward": history[-1]["reward"],
+            "steps": len(history),
         }
     return out
+
+
+def _normalize_fifo_climb(measured: dict) -> dict | None:
+    """Adapt measured_fifo_climb.json for the dashboard improvement chart."""
+    rows = measured.get("history") or []
+    history = [
+        {
+            "step": row["step"],
+            "reward": float(row["suppression"]),
+            "throughput": float(row.get("throughput", 0.0)),
+            "suppression": float(row.get("suppression", 0.0)),
+            "rtl_hash": row.get("rtl_hash"),
+        }
+        for row in rows
+        if isinstance(row, dict) and "step" in row and "throughput" in row
+    ]
+    if not history:
+        return None
+    start_tp = history[0]["throughput"]
+    end_tp = history[-1]["throughput"]
+    return {
+        "target": measured.get("target", "stream_arb_fifo"),
+        "backend": measured.get("backend", "verilator+fifo-throughput"),
+        "reward_source": measured.get("reward_source", "measured_fifo_throughput"),
+        "metric": "throughput",
+        "history": history,
+        "summary": {
+            "start_throughput": start_tp,
+            "end_throughput": end_tp,
+            "start_reward": history[0]["reward"],
+            "end_reward": history[-1]["reward"],
+            "steps": len(history),
+            "delta_throughput": round(end_tp - start_tp, 6),
+        },
+    }
+
+
+def _improvement_summary(climb: dict | None, fifo: dict | None, pareto_count: int) -> dict:
+    """Honest one-glance improvement stats for the demo strip."""
+    tracks: list[dict] = []
+    if isinstance(climb, dict) and climb.get("history"):
+        summary = climb.get("summary") or {}
+        start = float(summary.get("start_reward", climb["history"][0]["reward"]))
+        end = float(summary.get("end_reward", climb["history"][-1]["reward"]))
+        steps = int(summary.get("steps", len(climb["history"])))
+        tracks.append(
+            {
+                "target": climb.get("target", "cryo_brain_decoder"),
+                "metric": "suppression",
+                "steps": steps,
+                "start": round(start, 4),
+                "end": round(end, 4),
+                "improving": end > start and steps >= 2,
+                "note": "multi-step climb" if steps >= 2 and end > start else "golden baseline",
+            }
+        )
+    if isinstance(fifo, dict) and fifo.get("history"):
+        summary = fifo.get("summary") or {}
+        start_tp = float(summary.get("start_throughput", fifo["history"][0]["throughput"]))
+        end_tp = float(summary.get("end_throughput", fifo["history"][-1]["throughput"]))
+        steps = int(summary.get("steps", len(fifo["history"])))
+        tracks.append(
+            {
+                "target": fifo.get("target", "stream_arb_fifo"),
+                "metric": "throughput",
+                "steps": steps,
+                "start": round(start_tp, 4),
+                "end": round(end_tp, 4),
+                "improving": end_tp > start_tp and steps >= 2,
+                "note": f"+{round(end_tp - start_tp, 3)} measured throughput",
+            }
+        )
+    best_story = "fifo" if any(t.get("target") == "stream_arb_fifo" and t.get("improving") for t in tracks) else "decoder"
+    return {
+        "tracks": tracks,
+        "pareto_points": pareto_count,
+        "headline_target": best_story,
+        "agents_keep_improving": any(t.get("improving") for t in tracks),
+    }
 
 
 def _memory_from_measured(ab: dict) -> dict | None:
@@ -276,6 +357,13 @@ def _require_measured_pareto(artifacts: Path) -> tuple[list[dict], str]:
     return _pareto_from_measured(measured), "artifacts/measured_pareto.json"
 
 
+def _load_fifo_climb(artifacts: Path) -> tuple[dict | None, str]:
+    measured = _load(artifacts / "measured_fifo_climb.json")
+    fifo = _normalize_fifo_climb(measured) if isinstance(measured, dict) else None
+    source = "artifacts/measured_fifo_climb.json" if fifo else ""
+    return fifo, source
+
+
 def build_bundle(artifacts_dir: Path | None = None, *, require_measured: bool = True) -> dict:
     artifacts = artifacts_dir or ARTIFACTS
     vcd = artifacts / "cryo_golden_trace.vcd"
@@ -285,7 +373,9 @@ def build_bundle(artifacts_dir: Path | None = None, *, require_measured: bool = 
         climb, climb_source = _require_measured_climb(artifacts)
         memory, memory_source = _require_measured_memory(artifacts)
         pareto, pareto_source = _require_measured_pareto(artifacts)
+        fifo, fifo_source = _load_fifo_climb(artifacts)
         climb_era = memory_era = pareto_era = "measured"
+        fifo_era = "measured" if fifo else "missing"
     else:
         measured_climb = _load(artifacts / "measured_climb.json")
         climb = (
@@ -309,6 +399,9 @@ def build_bundle(artifacts_dir: Path | None = None, *, require_measured: bool = 
         )
         pareto_source = "artifacts/measured_pareto.json" if pareto else ""
         pareto_era = "measured" if pareto else "missing"
+
+        fifo, fifo_source = _load_fifo_climb(artifacts)
+        fifo_era = "measured" if fifo else "missing"
 
     cp5_audit = _load(artifacts / "cp5_audit.json")
     yosys_area_um2 = 6.0
@@ -336,10 +429,14 @@ def build_bundle(artifacts_dir: Path | None = None, *, require_measured: bool = 
         eras = {climb_era, memory_era, pareto_era} - {"missing"}
         data_era = "measured" if eras == {"measured"} else ("mixed" if eras else "missing")
 
+    pareto_count = len(pareto) if isinstance(pareto, list) else 0
+
     return {
         "data_era": data_era,
         "waveform": waveform,
         "climb": climb,
+        "fifo_climb": fifo,
+        "improvement": _improvement_summary(climb, fifo, pareto_count),
         "memory": memory,
         "pareto": {"budget": BUDGET, "yosys_area_um2": yosys_area_um2, "points": pareto},
         "gate": gate,
@@ -347,10 +444,12 @@ def build_bundle(artifacts_dir: Path | None = None, *, require_measured: bool = 
         "sources": {
             "waveform": "artifacts/waveform.json",
             "climb": climb_source,
+            "fifo_climb": fifo_source,
             "memory": memory_source,
             "pareto": pareto_source,
             "gate": "CP2 validity gate",
             "climb_era": climb_era,
+            "fifo_era": fifo_era,
             "memory_era": memory_era,
             "pareto_era": pareto_era,
         },

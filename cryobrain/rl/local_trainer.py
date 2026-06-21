@@ -35,7 +35,8 @@ import random
 from pathlib import Path
 from typing import Any, Callable
 
-from cryobrain.design.config import GOLDEN_BASELINE, mutate, preset_variants
+from cryobrain.design.config import GOLDEN_BASELINE, l2_safe_variants, mutate, preset_variants
+from cryobrain.rl.acceptance import ClimbAcceptState, should_accept_decoder_step, update_accept_state
 from cryobrain.grader.score import score_measured
 from cryobrain.memory.store import MemoryStore
 from cryobrain.rl.proposal_loop import (
@@ -77,7 +78,7 @@ def deterministic_proposer(
     that, mutate the current best design (the highest-measured-suppression
     variant carried in by the trainer). Deterministic given ``rng``.
     """
-    presets = preset_variants()
+    presets = l2_safe_variants()
     if step < len(presets):
         return presets[step]
     return mutate(best_design, rng)
@@ -92,8 +93,7 @@ def fireworks_proposer(
     """Live Fireworks proposer (C2). Raises without ``FIREWORKS_API_KEY``."""
     from cryobrain.rl.proposer import propose_next_design
 
-    design = propose_next_design({"best": memory_snapshot})
-    return design if design is not None else mutate(best_design, rng)
+    return propose_next_design({"best": memory_snapshot})
 
 
 # --- trainer ------------------------------------------------------------------
@@ -122,9 +122,8 @@ def run_measured_training(
     rng = random.Random(seed)
     store = store if store is not None else MemoryStore()
 
-    presets = preset_variants()
     best_design = GOLDEN_BASELINE
-    best_suppression = float("-inf")
+    accept_state = ClimbAcceptState.empty()
     history: list[dict[str, Any]] = []
     steps_log: list[dict[str, Any]] = []
 
@@ -141,10 +140,21 @@ def run_measured_training(
             task_root=task_root,
         )
 
-        # Accept only on MEASURED improvement; first valid variant sets the bar.
-        accepted = result.valid and (result.suppression > best_suppression or not history)
+        accepted = should_accept_decoder_step(
+            valid=result.valid,
+            suppression=result.suppression,
+            rtl_hash=result.rtl_hash,
+            score=result.score,
+            state=accept_state,
+            history_len=len(history),
+        )
         if accepted:
-            best_suppression = result.suppression
+            accept_state = update_accept_state(
+                accept_state,
+                suppression=result.suppression,
+                rtl_hash=result.rtl_hash,
+                score=result.score,
+            )
             best_design = result.design
             history.append(result.climb_row())
 
