@@ -35,6 +35,19 @@ def _measured_memory_fixture() -> dict:
     }
 
 
+def _measured_fifo_fixture() -> dict:
+    return {
+        "backend": "verilator+fifo-throughput",
+        "reward_source": "measured_fifo_throughput",
+        "target": "stream_arb_fifo",
+        "history": [
+            {"step": 0, "throughput": 0.1, "suppression": 0.05, "rtl_hash": "fifo_a"},
+            {"step": 1, "throughput": 0.35, "suppression": 0.30, "rtl_hash": "fifo_b"},
+            {"step": 2, "throughput": 0.42, "suppression": 0.38, "rtl_hash": "fifo_c"},
+        ],
+    }
+
+
 def _measured_pareto_fixture() -> dict:
     return {
         "points": [
@@ -73,6 +86,7 @@ def _write_json(path: Path, payload: dict | list) -> None:
 def test_build_demo_prefers_measured_artifacts(tmp_path: Path):
     artifacts = tmp_path / "artifacts"
     _write_json(artifacts / "measured_climb.json", _measured_climb_fixture())
+    _write_json(artifacts / "measured_fifo_climb.json", _measured_fifo_fixture())
     _write_json(artifacts / "measured_memory_ab.json", _measured_memory_fixture())
     _write_json(artifacts / "measured_pareto.json", _measured_pareto_fixture())
     # Proxy-era files present but must lose to measured.
@@ -83,11 +97,16 @@ def test_build_demo_prefers_measured_artifacts(tmp_path: Path):
 
     assert bundle["data_era"] == "measured"
     assert bundle["sources"]["climb"] == "artifacts/measured_climb.json"
+    assert bundle["sources"]["fifo_climb"] == "artifacts/measured_fifo_climb.json"
     assert bundle["sources"]["memory"] == "artifacts/measured_memory_ab.json"
     assert bundle["sources"]["pareto"] == "artifacts/measured_pareto.json"
     assert bundle["sources"]["climb_era"] == "measured"
+    assert bundle["sources"]["fifo_era"] == "measured"
     assert bundle["climb"]["reward_source"] == "score_measured"
     assert bundle["climb"]["history"][1]["reward"] == 0.20
+    assert bundle["fifo_climb"]["history"][2]["throughput"] == 0.42
+    assert bundle["improvement"]["agents_keep_improving"] is True
+    assert any(t["target"] == "stream_arb_fifo" for t in bundle["improvement"]["tracks"])
     assert bundle["memory"]["with_memory"]["end_reward"] == 0.15
     assert len(bundle["pareto"]["points"]) == 2
     assert bundle["pareto"]["points"][0]["ler"] == 0.018
@@ -117,6 +136,7 @@ def test_build_demo_rejects_proxy_only_artifacts(tmp_path: Path):
 def test_build_demo_includes_swarm_timeline_when_log_present(tmp_path: Path):
     artifacts = tmp_path / "artifacts"
     _write_json(artifacts / "measured_climb.json", _measured_climb_fixture())
+    _write_json(artifacts / "measured_fifo_climb.json", _measured_fifo_fixture())
     _write_json(artifacts / "measured_memory_ab.json", _measured_memory_fixture())
     _write_json(artifacts / "measured_pareto.json", _measured_pareto_fixture())
     log = artifacts / "swarm" / "event_log.jsonl"
