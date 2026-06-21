@@ -1,0 +1,14 @@
+# Yosys synthesis sign-off for the parametric stream-arbiter FIFO (SPEC-v5 GEN).
+# Mirrors the decoder task's synth flow: read, elaborate, synth, dump cell stats.
+read_verilog -sv rtl/stream_arb_fifo.sv
+hierarchy -check -top stream_arb_fifo
+proc
+opt
+fsm
+opt
+memory
+opt
+techmap
+opt
+stat -json
+write_json reports/fifo_proc.json
