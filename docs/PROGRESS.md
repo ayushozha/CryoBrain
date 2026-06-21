@@ -1,5 +1,7 @@
 # CryoBrain — Progress Summary
 
+> **Current truth (SPEC-v6, measured artifacts):** see [`PROGRESS_UPDATE_2026-06-21.md`](PROGRESS_UPDATE_2026-06-21.md). This file is a longer SPEC-v5-era archive; sections below may be stale.
+
 **Last updated:** 2026-06-21
 **Repo:** https://github.com/ayushozha/CryoBrain
 **Branch:** `main` only (all feature branches merged and deleted)
