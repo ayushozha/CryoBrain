@@ -2,6 +2,42 @@
 
 **30 parallel subagents** across 3 orchestrators (10 each). Engineering only — no demo/dashboard/fake data.
 
+---
+
+## Tell agents to read — that is enough
+
+Each handoff doc has a **START HERE** section at the top. You do **not** need to write a long prompt.
+
+### What to say (one line per orchestrator)
+
+| Tool | Say this |
+|------|----------|
+| **Codex** | Read `docs/agents/HANDOFF-CODEX.md` and execute it. |
+| **Claude** | Read `docs/agents/HANDOFF-CLAUDE.md` and execute it. |
+| **Grok / Cursor** | Read `docs/agents/HANDOFF-GROK.md` and execute it. |
+
+Each orchestrator will: read the spec stack, pick the right **wave** (not all 10 agents at once), spawn subagents with the built-in spawn template, and respect blockers.
+
+### Optional: assign one slot directly
+
+If you want a single subagent instead of the full orchestrator:
+
+| Tool | Say this |
+|------|----------|
+| Codex | Read `docs/agents/HANDOFF-CODEX.md`. You are Codex agent **X1**. Execute only section X1. |
+| Claude | Read `docs/agents/HANDOFF-CLAUDE.md`. You are Claude agent **C8**. Execute only section C8. |
+| Grok | Read `docs/agents/HANDOFF-GROK.md`. You are Grok agent **G3**. Execute only section G3. |
+
+Replace `X1` / `C8` / `G3` with any slot from that handoff doc.
+
+### Launch order across tools (you only say “read” — they coordinate)
+
+1. **Codex** + **Grok** first (proxy kill + MP0 spine)  
+2. **Claude** anytime for C8 smoke; full Claude work unlocks after Grok MP0/MP1  
+3. Details: [`00-MASTER_PLAN.md`](./00-MASTER_PLAN.md)
+
+---
+
 ## Documents
 
 | Doc | Audience |

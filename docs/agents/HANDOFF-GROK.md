@@ -7,6 +7,84 @@
 
 ---
 
+## START HERE (read this if a human said “read this file”)
+
+You have everything you need in this repo. Follow this section before touching code.
+
+**This pool is on the critical path.** Claude and Codex are blocked on your frozen APIs until MP0/MP1 land.
+
+### Step 1 — Reading order (mandatory)
+
+Read these files **in this order** before any implementation:
+
+1. [`docs/specs/SPEC-v5.md`](../specs/SPEC-v5.md) — canonical requirements  
+2. [`docs/SPEC_REALITY_AUDIT.md`](../SPEC_REALITY_AUDIT.md) — proxy kill list  
+3. [`00-MASTER_PLAN.md`](./00-MASTER_PLAN.md) — DAG, frozen interfaces, milestones  
+4. **This file** — your pool’s 10 agent slots (sections G1–G10 below)
+
+### Step 2 — Figure out your role
+
+| Situation | What you do |
+|-----------|-------------|
+| Human said “read `HANDOFF-GROK.md`” with **no slot** | You are the **Grok/Cursor orchestrator**. Run **Wave 1** in parallel, prioritize **G3** for MP0, per [Orchestrator playbook](#orchestrator-playbook-grok) below. |
+| Human said “you are **G{N}**” or orchestrator assigned a slot | You are **Grok subagent G{N}**. Read **only** section **G{N}** below. |
+| Codex X1 has not landed yet | Grok can still start G1/G2/G9/G4 skeleton; coordinate so G10 does not merge before proxy is dead. |
+
+### Step 3 — Hard rules (every Grok agent)
+
+- **You own** measured LER, RTL generation, Yosys metrics, L1/L4/L5 gates, and `score_measured`.  
+- **Do not** edit `demo/`, dashboard, `cryobrain/memory/`, or `cryobrain/rl/` (Claude pool).  
+- **Do not** use `simulate_candidate_ler` or `decoder_quality_multiplier` in any path you touch.  
+- **Do not** break frozen interface signatures in `00-MASTER_PLAN.md` without updating `INTERFACE_CONTRACTS.md` and notifying other pools.  
+- **One branch per slot:** `feat/v5-g{N}-<short-slug>`.  
+- **EDA runs in WSL** — coordinate with Codex X8 scripts.  
+- **Done** = section acceptance + MP gate unlocked if your slot owns it.
+
+### Step 4 — Wave order (do not launch all 10 at once)
+
+| Wave | Slots | Milestone | Notes |
+|------|-------|-----------|-------|
+| **1** | **G1**, **G2**, **G9**, G4 (skeleton) | — | All parallel; hour 0 |
+| **2** | **G3** | **MP0** | Keystone — blocks Claude/Codex |
+| **3** | **G4**, **G5**, G6, G7 | **MP1** | After MP0 green |
+| **4** | **G10**, G8 | **MP2** | After MP1; needs Codex X1 proxy dead |
+| **5** | G6/G7/G8 hardening | **MP5** | With Codex X3 |
+
+**Orchestrator default:** if unsure, assign **G1 + G2 + G9** first, then **G3** as soon as G1 types exist.
+
+### Orchestrator playbook (Grok)
+
+When acting as orchestrator with 10 parallel subagents:
+
+1. **Wave 1 (parallel):** G1 + G2 + G9 + G4 skeleton.  
+2. **Wave 2 (critical):** G3 until `wsl bash scripts/run_mp0_wsl.sh` passes.  
+3. **Wave 3:** G4 + G5 + G6 + G7 until `wsl bash scripts/run_mp1_wsl.sh` passes.  
+4. **Wave 4:** G10 (after Codex X1 proxy kill) + G8.  
+5. Announce in PR/mesh when MP0 and MP1 pass so Claude/Codex unlock Waves 2+.  
+6. Each subagent: branch `feat/v5-g{N}-…`, owned paths only, acceptance from section G{N}.
+
+Subagent spawn text (orchestrator copies per slot):
+
+```
+You are Grok agent G{N} for CryoBrain SPEC-v5.
+Read in order: docs/specs/SPEC-v5.md, docs/SPEC_REALITY_AUDIT.md, docs/agents/00-MASTER_PLAN.md, docs/agents/HANDOFF-GROK.md section G{N} only.
+Branch: feat/v5-g{N}-<slug>. Own only paths listed in G{N}.
+NON-GOALS: demo/, dashboard, fake LER, decoder_quality_multiplier, cryobrain/memory/, cryobrain/rl/.
+Done when: <paste Acceptance block from section G{N}>.
+```
+
+### What the human can say (copy-paste)
+
+**To Grok/Cursor orchestrator (minimum):**
+
+> Read `docs/agents/HANDOFF-GROK.md` and execute it. You are the Grok orchestrator — follow START HERE and prioritize G3 for MP0.
+
+**To a single Grok subagent:**
+
+> Read `docs/agents/HANDOFF-GROK.md`. You are Grok agent **G3**. Execute only section G3.
+
+---
+
 ## Pool Mission
 
 Grok/Cursor owns the **critical path spine**: measured LER (P0), parametric RTL generation (P1), per-variant Yosys (P1), verification layers L1/L4/L5, and `grade.py` → `score_measured`. **Nothing in Claude or Codex pools ships real numbers until Grok lands frozen interfaces.**

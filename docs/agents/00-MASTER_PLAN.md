@@ -6,6 +6,22 @@
 
 ---
 
+## Human kickoff (one line per tool)
+
+You do not need a custom prompt. Each pool handoff opens with **START HERE**:
+
+| Orchestrator | Human says |
+|--------------|------------|
+| Codex | Read `docs/agents/HANDOFF-CODEX.md` and execute it. |
+| Claude | Read `docs/agents/HANDOFF-CLAUDE.md` and execute it. |
+| Grok / Cursor | Read `docs/agents/HANDOFF-GROK.md` and execute it. |
+
+Orchestrators read the spec stack, follow wave order (not 10 agents at once), spawn subagents from the template in their handoff, and block on MP0/MP1 where required. Optional single slot: *“You are agent **G3** — execute only section G3.”*
+
+Index: [`README.md`](./README.md)
+
+---
+
 ## North star
 
 Build a **measured** verifiable RL environment for cryogenic QEC decoder co-design:

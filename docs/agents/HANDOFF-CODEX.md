@@ -7,6 +7,82 @@
 
 ---
 
+## START HERE (read this if a human said “read this file”)
+
+You have everything you need in this repo. Follow this section before touching code.
+
+### Step 1 — Reading order (mandatory)
+
+Read these files **in this order** before any implementation:
+
+1. [`docs/specs/SPEC-v5.md`](../specs/SPEC-v5.md) — canonical requirements  
+2. [`docs/SPEC_REALITY_AUDIT.md`](../SPEC_REALITY_AUDIT.md) — what is fake today; kill list  
+3. [`00-MASTER_PLAN.md`](./00-MASTER_PLAN.md) — DAG, frozen interfaces, milestones, path ownership  
+4. **This file** — your pool’s 10 agent slots (sections X1–X10 below)
+
+### Step 2 — Figure out your role
+
+| Situation | What you do |
+|-----------|-------------|
+| Human said “read `HANDOFF-CODEX.md`” with **no slot** | You are the **Codex orchestrator**. Run **Wave 1** yourself (X1), then spawn subagents per [Orchestrator playbook](#orchestrator-playbook-codex) below. |
+| Human said “you are **X{N}**” or orchestrator assigned a slot | You are **Codex subagent X{N}**. Read **only** section **X{N}** below. Do not implement other slots. |
+| Grok APIs (`measure_candidate_ler`, etc.) do not exist yet | Expected early on. **X1, X2, X5, X8 stubs, X4 tests** can proceed. Do **not** implement those APIs — that is Grok G3/G4/G5. |
+
+### Step 3 — Hard rules (every Codex agent)
+
+- **Do not** implement `measure_candidate_ler`, `generate_rtl`, `synth_metrics`, or `score_measured` — test and guard Grok’s implementations.  
+- **Do not** edit `demo/`, dashboard, or write fake LER / `decoder_quality_multiplier` into artifacts.  
+- **Do not** edit Claude-owned paths (`cryobrain/memory/`, `cryobrain/rl/local_trainer.py`) except tests.  
+- **One branch per slot:** `feat/v5-x{N}-<short-slug>`.  
+- **EDA proof runs in WSL** — use `scripts/run_mp0_wsl.sh`, not Windows-native Verilator.  
+- **Done** = your section’s acceptance commands pass + `mesh.log_action` or PR note if mesh unavailable.
+
+### Step 4 — Wave order (do not launch all 10 at once)
+
+| Wave | Slots | Start when | Blocks |
+|------|-------|------------|--------|
+| **1** | **X1**, X2, X5, X8 (stubs OK) | Immediately | Everyone (proxy must die) |
+| **2** | **X4**, X6, X9 | Grok G3 has minimal `measure_candidate_ler` | MP0 |
+| **3** | X8 (mp1), X10 | Grok G4/G5 land | MP1 |
+| **4** | X7, X10 (full) | Grok G10 + Claude C5 | MP2 |
+| **5** | X3, X8 (mp5) | MP3 stable | MP5 |
+
+**Orchestrator default:** if unsure which slot to run, start with **X1 (Proxy Killer)**.
+
+### Orchestrator playbook (Codex)
+
+When acting as orchestrator with 10 parallel subagents:
+
+1. Run **X1** first (or assign subagent X1) — nothing else merges until proxy is dead.  
+2. Launch **X2 + X5 + X8** in parallel with X1.  
+3. Poll Grok **G3**; when `measure_candidate_ler` stub works, launch **X4 + X6**.  
+4. After MP0 green (`wsl bash scripts/run_mp0_wsl.sh`), launch **X9**.  
+5. After MP1, launch **X10**; after MP2, **X7**; after MP3, **X3**.  
+6. Each subagent: branch `feat/v5-x{N}-…`, owned paths only, acceptance block from section X{N}.
+
+Subagent spawn text (orchestrator copies per slot):
+
+```
+You are Codex agent X{N} for CryoBrain SPEC-v5.
+Read in order: docs/specs/SPEC-v5.md, docs/SPEC_REALITY_AUDIT.md, docs/agents/00-MASTER_PLAN.md, docs/agents/HANDOFF-CODEX.md section X{N} only.
+Branch: feat/v5-x{N}-<slug>. Own only paths listed in X{N}.
+Do NOT implement measure_candidate_ler / generate_rtl / synth_metrics (Grok owns those).
+NON-GOALS: demo/, dashboard, fake LER, decoder_quality_multiplier.
+Done when: <paste Acceptance block from section X{N}>.
+```
+
+### What the human can say (copy-paste)
+
+**To Codex orchestrator (minimum):**
+
+> Read `docs/agents/HANDOFF-CODEX.md` and execute it. You are the Codex orchestrator — follow START HERE and the wave order.
+
+**To a single Codex subagent:**
+
+> Read `docs/agents/HANDOFF-CODEX.md`. You are Codex agent **X1**. Execute only section X1.
+
+---
+
 ## Pool Mission
 
 Codex owns **proxy elimination, CI guards, keystone tests, artifact schema, SymbiYosys formal, WSL runners, and integration gates**. You are the **truth enforcement layer** — if proxy LER sneaks back, your tests must fail before merge.

@@ -7,6 +7,84 @@
 
 ---
 
+## START HERE (read this if a human said “read this file”)
+
+You have everything you need in this repo. Follow this section before touching code.
+
+### Step 1 — Reading order (mandatory)
+
+Read these files **in this order** before any implementation:
+
+1. [`docs/specs/SPEC-v5.md`](../specs/SPEC-v5.md) — canonical requirements  
+2. [`docs/SPEC_REALITY_AUDIT.md`](../SPEC_REALITY_AUDIT.md) — what is fake today  
+3. [`00-MASTER_PLAN.md`](./00-MASTER_PLAN.md) — DAG, frozen interfaces, milestones  
+4. **This file** — your pool’s 10 agent slots (sections C1–C10 below)
+
+### Step 2 — Figure out your role
+
+| Situation | What you do |
+|-----------|-------------|
+| Human said “read `HANDOFF-CLAUDE.md`” with **no slot** | You are the **Claude orchestrator**. Start **Wave 1** (C8 smoke only), then spawn subagents per [Orchestrator playbook](#orchestrator-playbook-claude) below. **Do not** launch full trainer/memory until Grok MP0/MP1 pass. |
+| Human said “you are **C{N}**” or orchestrator assigned a slot | You are **Claude subagent C{N}**. Read **only** section **C{N}** below. |
+| `from cryobrain.accuracy.measured_ler import measure_candidate_ler` fails | **Stop and wait** (except C8 smoke / C6 scaffold). Do not fork a local implementation — escalate to Grok G3. |
+
+### Step 3 — Hard rules (every Claude agent)
+
+- **Import** Grok APIs — never reimplement `measure_candidate_ler`, `generate_rtl`, `synth_metrics`, `score_measured`.  
+- **Do not** edit `demo/`, dashboard, or Grok-owned paths (`cryobrain/accuracy/measured_ler.py`, `cryobrain/rtl_gen/`, `cryobrain/grader/score.py`).  
+- **Do not** put `decoder_quality_multiplier` or formula LER into `artifacts/measured_*.json`.  
+- **Sponsor calls must be real** when API keys exist; skip tests when keys missing — never fake responses in prod paths.  
+- **One branch per slot:** `feat/v5-c{N}-<short-slug>`.  
+- **Done** = section acceptance passes + artifacts validate against Codex X5 schemas when they exist.
+
+### Step 4 — Wave order (do not launch all 10 at once)
+
+| Wave | Slots | Start when | Wait for Grok |
+|------|-------|------------|---------------|
+| **1** | **C8** (smoke: imports, tool schema) | Immediately | None |
+| **1b** | C6 scaffold, C1 schema draft | Parallel with Wave 1 | None |
+| **2** | **C1**, **C5**, C2, C7 | **MP1** passed (`run_mp1_wsl.sh`) | G3, G4, G5, G10 |
+| **3** | **C3**, **C4**, C10 | **MP2** passed | G10 `score_measured` |
+| **4** | C9 (GEN FIFO) | **MP3** passed | Full decoder loop |
+| **5** | C8 full CP0, C10 pareto finalize | MP3 + memory rows | L1–L5 stack |
+
+**Orchestrator default:** if unsure, start with **C8 smoke**, then poll MP0/MP1 before assigning C5/C1.
+
+### Orchestrator playbook (Claude)
+
+When acting as orchestrator with 10 parallel subagents:
+
+1. **Wave 1:** C8 smoke + C6 scaffold + C1 models-only (no measured loop).  
+2. **Block** C5, C2, C3, C4, C7, C10 on Grok MP0 — check `wsl bash scripts/run_mp0_wsl.sh`.  
+3. **Block** full C1/C5 integration on Grok MP1 — check `wsl bash scripts/run_mp1_wsl.sh`.  
+4. After MP1: launch **C1 + C5 + C2 + C7** in parallel.  
+5. After MP2: launch **C3 + C4**; then **C10**.  
+6. After MP3: launch **C9**; finish **C8** CP0.
+
+Subagent spawn text (orchestrator copies per slot):
+
+```
+You are Claude agent C{N} for CryoBrain SPEC-v5.
+Read in order: docs/specs/SPEC-v5.md, docs/agents/00-MASTER_PLAN.md, docs/agents/HANDOFF-CLAUDE.md section C{N} only.
+Branch: feat/v5-c{N}-<slug>. Own only paths listed in C{N}.
+IMPORT Grok APIs — never implement measure_candidate_ler / generate_rtl / synth_metrics / score_measured.
+If imports fail and you are not C8/C6 scaffold: stop and report blocker (Grok MP0/MP1).
+NON-GOALS: demo/, dashboard, fake sponsor data, decoder_quality_multiplier.
+Done when: <paste Acceptance block from section C{N}>.
+```
+
+### What the human can say (copy-paste)
+
+**To Claude orchestrator (minimum):**
+
+> Read `docs/agents/HANDOFF-CLAUDE.md` and execute it. You are the Claude orchestrator — follow START HERE and wave order. Wait for Grok MP0/MP1 before trainer/memory work.
+
+**To a single Claude subagent:**
+
+> Read `docs/agents/HANDOFF-CLAUDE.md`. You are Claude agent **C8**. Execute only section C8.
+
+---
+
 ## Pool Mission
 
 Claude owns **learning loop, memory, sponsor integrations, HUD eval, GEN second target, and measured artifacts** for benchmarks. You **consume** Grok's frozen APIs (`measure_candidate_ler`, `generate_rtl`, `synth_metrics`, `score_measured`) — never reimplement them.
