@@ -12,8 +12,7 @@ The frozen record schema (HANDOFF-CLAUDE.md "Memory Record Schema") is::
     }
 
 The ``measurement`` block is sourced from ``measure_candidate_ler``
-(a ``MeasureResult``) ONLY — no formula/proxy LER, no
-``decoder_quality_multiplier``. The ``synth`` block stores the subset of
+(a ``MeasureResult``) ONLY — no formula/proxy LER. The ``synth`` block stores the subset of
 Grok's ``synth_metrics`` output that matters for pareto/budget reasoning. We
 reuse Grok's ``DesignConfig`` (dataclass), ``MeasureResult`` and
 ``SynthMetrics`` (TypedDicts) shapes here rather than redefining them.
