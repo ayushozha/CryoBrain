@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from cryobrain.calibration.cp3 import stage_workdir
+from cryobrain.design.config import GOLDEN_BASELINE
 from cryobrain.grader.score import score_measured
 from cryobrain.memory.models import MemoryRecord, Verification
 from cryobrain.memory.store import MemoryStore, rtl_hash
@@ -65,16 +66,17 @@ def _step_enum(current: int, allowed: tuple[int, ...]) -> int:
 
 def apply_research_bias(design: DesignConfig, pack: ContextPack) -> DesignConfig:
     """Nudge the proposed design using literature themes (§2.5 adoption)."""
-    if not pack.hits:
+    if design == GOLDEN_BASELINE or not pack.hits:
         return design
     text = " ".join(hit.get("snippet", "") for hit in pack.hits).lower()
+    biased = design
     if "fpga" in text or "parallel" in text:
-        return replace(design, parallelism=_step_enum(design.parallelism, (1, 2, 4)))
+        biased = replace(biased, parallelism=_step_enum(biased.parallelism, (1, 2, 4)))
     if "pipeline" in text or "latency" in text:
-        return replace(design, pipeline_depth=min(16, design.pipeline_depth + 2))
+        biased = replace(biased, pipeline_depth=min(16, biased.pipeline_depth + 2))
     if "layer" in text or "depth" in text:
-        return replace(design, num_layers=min(4, max(2, design.num_layers)))
-    return design
+        biased = replace(biased, num_layers=min(4, max(2, biased.num_layers)))
+    return biased
 
 
 @dataclass(frozen=True)

@@ -154,6 +154,11 @@ def _copy_artifact_ref(ref: str | None, out_dir: Path) -> None:
         shutil.copy2(src, out_dir / src.name)
 
 
+def _assert_verification_green(report: dict) -> None:
+    if not bool(report.get("all_passed")):
+        raise RuntimeError("verification_report all_passed=false")
+
+
 def _consistent_measurement_score(measurement: dict, score: dict) -> bool:
     if not measurement or not score:
         return False
@@ -224,8 +229,11 @@ def export_design_runs(*, log_path: Path = DEFAULT_LOG, limit: int = 5) -> list[
                 from cryobrain.types import DesignConfig
 
                 workdir = out_dir / "_gen"
-                generate_rtl(DesignConfig.from_dict(design_payload), workdir)
-                shutil.copy2(workdir / "cryo_brain_decoder.sv", out_dir / "generated_decoder.sv")
+                try:
+                    generate_rtl(DesignConfig.from_dict(design_payload), workdir)
+                    shutil.copy2(workdir / "cryo_brain_decoder.sv", out_dir / "generated_decoder.sv")
+                finally:
+                    shutil.rmtree(workdir, ignore_errors=True)
 
         measurement = _first_event(events, "Measurement", "measure")
         measurement_payload = (measurement or {}).get("payload", {})
@@ -308,10 +316,13 @@ def export_verification_report() -> Path:
             l4={"passed": "L4" in score.get("layers_passed", [])},
             l5={"passed": "L5" in score.get("layers_passed", [])},
         )
+        _assert_verification_green(report)
         VERIFICATION_REPORT.parent.mkdir(parents=True, exist_ok=True)
         VERIFICATION_REPORT.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         return VERIFICATION_REPORT
 
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    _assert_verification_green(report)
     VERIFICATION_REPORT.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(report_path, VERIFICATION_REPORT)
     return VERIFICATION_REPORT
@@ -321,6 +332,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--design-runs", type=int, default=5, help="Number of design cycles to export")
     parser.add_argument("--skip-verification", action="store_true")
+    parser.add_argument("--allow-verification-template", action="store_true")
     args = parser.parse_args()
 
     exported = export_design_runs(limit=args.design_runs)
@@ -331,6 +343,8 @@ def main() -> None:
             path = export_verification_report()
             print(f"verification_report: {path}")
         except Exception as exc:  # noqa: BLE001 — CLI fallback for Windows without EDA
+            if not args.allow_verification_template:
+                raise
             write_verification_report_template(ROOT)
             print(f"verification_report template (EDA unavailable: {exc}): {VERIFICATION_REPORT}")
 

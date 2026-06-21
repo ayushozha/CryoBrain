@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts import export_spec_v61_artifacts as exporter
 
 
@@ -71,3 +73,35 @@ def test_export_design_runs_keeps_reused_design_ids_coherent(tmp_path, monkeypat
     second = json.loads((tmp_path / "artifacts" / "design_runs" / "d001" / "score.json").read_text(encoding="utf-8"))
     assert first["ler"] == 0.1
     assert second["ler"] == 0.2
+
+
+def test_export_design_runs_removes_generated_rtl_scratch_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(exporter, "ROOT", tmp_path)
+    monkeypatch.setattr(exporter, "DESIGN_RUNS", tmp_path / "artifacts" / "design_runs")
+
+    def fake_generate_rtl(_design, out_dir: Path) -> Path:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        rtl = out_dir / "cryo_brain_decoder.sv"
+        rtl.write_text("module generated; endmodule\n", encoding="utf-8")
+        return rtl
+
+    monkeypatch.setattr(exporter, "generate_rtl", fake_generate_rtl)
+
+    log = tmp_path / "artifacts" / "swarm" / "event_log.jsonl"
+    measure_ref = "artifacts/measured/d000.json"
+    score_ref = "artifacts/scores/d000.json"
+    _write_json(tmp_path / measure_ref, {"design_id": "d000", "measurement": {"candidate_ler": 0.1, "suppression": 0.9}})
+    _write_json(tmp_path / score_ref, {"design_id": "d000", "valid": True, "ler": 0.1, "suppression": 0.9})
+    events = _run_events("d000", tmp_path / "missing.sv", 0.1, score_ref, measure_ref)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+
+    assert exporter.export_design_runs(log_path=log, limit=1) == ["d000"]
+    run_dir = tmp_path / "artifacts" / "design_runs" / "d000"
+    assert (run_dir / "generated_decoder.sv").is_file()
+    assert not (run_dir / "_gen").exists()
+
+
+def test_verification_report_failure_is_blocking():
+    with pytest.raises(RuntimeError, match="all_passed=false"):
+        exporter._assert_verification_green({"all_passed": False})

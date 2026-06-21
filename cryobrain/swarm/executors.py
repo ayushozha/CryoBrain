@@ -92,8 +92,6 @@ def architect_propose_step(
             context_pack.prompt_block().encode()
         ).hexdigest()[:6]
         payload["prompt_influenced"] = prompt_influenced or bool(context_pack.urls)
-    elif context_pack is not None and context_pack.urls:
-        payload["prompt_influenced"] = prompt_influenced
     bus.emit(
         agent=Agent.ARCHITECT,
         action="propose",
