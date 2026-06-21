@@ -14,7 +14,11 @@ def _load_dotenv() -> None:
     root = Path(__file__).resolve().parents[2]
     env_path = root / ".env"
     if env_path.is_file():
-        load_dotenv(env_path)
+        # override=True so the project .env wins over stale placeholder values
+        # left in the shell environment (e.g. an EXA_API_KEY=REPLACE_ME export
+        # shadowing the real key). python-dotenv does NOT override existing env
+        # vars by default, which silently 401s sponsor calls.
+        load_dotenv(env_path, override=True)
 
 
 def get_key(name: str) -> str | None:
