@@ -34,7 +34,12 @@ def l2_safe_variants() -> list[DesignConfig]:
     """L2-valid generated family: golden decode, distinct hardware tradeoffs."""
     return [
         GOLDEN_BASELINE,
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=1, pipeline_depth=2, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=1, pipeline_depth=4, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=2, pipeline_depth=2, window_length=8),
         DesignConfig(bitwidth=4, num_layers=2, parallelism=2, pipeline_depth=4, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=2, pipeline_depth=8, window_length=8),
+        DesignConfig(bitwidth=4, num_layers=2, parallelism=4, pipeline_depth=2, window_length=8),
         DesignConfig(bitwidth=4, num_layers=2, parallelism=4, pipeline_depth=8, window_length=8),
     ]
 

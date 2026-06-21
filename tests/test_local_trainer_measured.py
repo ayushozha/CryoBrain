@@ -122,7 +122,7 @@ def test_accepted_steps_append_climb_rows_with_hash_and_ler(tmp_path):
     history = result["history"]
     assert len(history) == 3
     for row in history:
-        assert set(row) == {"step", "candidate_ler", "suppression", "rtl_hash"}
+        assert {"step", "candidate_ler", "suppression", "rtl_hash"}.issubset(row.keys())
         assert row["rtl_hash"]  # non-empty sha256 of the real generated .sv
     assert [r["candidate_ler"] for r in history] == [0.030, 0.020, 0.012]
     # Persisted climb artifact carries measured fields only.
@@ -131,6 +131,30 @@ def test_accepted_steps_append_climb_rows_with_hash_and_ler(tmp_path):
     persisted = json.loads(climb.read_text(encoding="utf-8"))
     assert persisted["reward_source"] == "score_measured"
     assert len(persisted["history"]) == 3
+
+
+def test_pareto_acceptance_at_tied_suppression(tmp_path):
+    """Tied suppression but lower latency => accepted (hardware Pareto win)."""
+    calls = [0]
+
+    def fake_score(workdir: Path) -> dict[str, Any]:
+        calls[0] += 1
+        latency = 8 if calls[0] == 1 else 4
+        rtl = Path(workdir) / "rtl" / "cryo_brain_decoder.sv"
+        rtl.write_text(rtl.read_text(encoding="utf-8") + f"\n// marker {calls[0]}\n", encoding="utf-8")
+        return {
+            **_valid_score(0.9, 0.0, 1.0),
+            "latency_cycles": latency,
+            "synth": {"area_um2": 6.0, "latency_cycles": latency, "power_mw_est": 0.048, "valid": True},
+        }
+
+    result = local_trainer.run_measured_training(
+        steps=2,
+        score_fn=fake_score,
+        store=_store(tmp_path),
+        climb_path=tmp_path / "climb.json",
+    )
+    assert len(result["history"]) == 2
 
 
 def test_memory_record_written_per_accepted_variant(tmp_path):

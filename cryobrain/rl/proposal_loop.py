@@ -95,12 +95,19 @@ class StepResult:
 
     def climb_row(self) -> dict[str, Any]:
         """Row for ``artifacts/measured_climb.json`` (measured fields only)."""
-        return {
+        row: dict[str, Any] = {
             "step": self.step,
             "candidate_ler": self.candidate_ler,
             "suppression": self.suppression,
             "rtl_hash": self.rtl_hash,
         }
+        area = self.score.get("area_um2")
+        latency = self.score.get("latency_cycles")
+        if area is not None:
+            row["area_um2"] = float(area)
+        if latency is not None:
+            row["latency_cycles"] = int(latency)
+        return row
 
 
 def build_workdir(design: DesignConfig, scenario: dict[str, Any], *, task_root: Path = TASK_ROOT) -> Path:
