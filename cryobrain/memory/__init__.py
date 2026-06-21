@@ -8,6 +8,7 @@ from ``measure_candidate_ler`` only.
 
 from cryobrain.memory.buffer import VerifiedDesignBuffer, VerifiedDesignRecord
 from cryobrain.memory.models import (
+    VERIFY_LAYERS,
     MemoryRecord,
     Measurement,
     Provenance,
@@ -34,6 +35,7 @@ __all__ = [
     "Measurement",
     "Synth",
     "Verification",
+    "VERIFY_LAYERS",
     "Provenance",
     "ParetoCandidate",
     "DEFAULT_STORE",

@@ -13,8 +13,10 @@ The frozen record schema (HANDOFF-CLAUDE.md "Memory Record Schema") is::
 
 The ``measurement`` block is sourced from ``measure_candidate_ler``
 (a ``MeasureResult``) ONLY — no formula/proxy LER, no
-``decoder_quality_multiplier``. We reuse Grok's ``DesignConfig`` (dataclass)
-and ``MeasureResult`` (TypedDict) shapes here rather than redefining them.
+``decoder_quality_multiplier``. The ``synth`` block stores the subset of
+Grok's ``synth_metrics`` output that matters for pareto/budget reasoning. We
+reuse Grok's ``DesignConfig`` (dataclass), ``MeasureResult`` and
+``SynthMetrics`` (TypedDicts) shapes here rather than redefining them.
 """
 
 from __future__ import annotations
@@ -24,7 +26,12 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from cryobrain.accuracy.types import MeasureResult
+from cryobrain.rtl_grader.synth_metrics import SynthMetrics
 from cryobrain.types import DesignConfig
+
+# The real verification layers in cryobrain/verify/ (run_l1, run_l4, run_l5).
+# There is no L2/L3 gate in-tree; records must reflect what actually ran.
+VERIFY_LAYERS: tuple[str, ...] = ("L1", "L4", "L5")
 
 
 class Measurement(BaseModel):
@@ -51,21 +58,56 @@ class Measurement(BaseModel):
 
 
 class Synth(BaseModel):
-    """Per-variant synthesis block (subset of Grok SynthMetrics)."""
+    """Per-variant synthesis block — subset of Grok ``SynthMetrics``.
+
+    We persist the measured fields that matter for pareto / budget reasoning
+    (area, latency, estimated power, synth validity) and deliberately DROP the
+    raw ``yosys_log_path`` (machine-local path, churns per run) and
+    ``cell_count`` (intermediate Yosys detail) so the record stays clean and
+    portable. ``extra="forbid"`` still guards the block.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     area_um2: float
     latency_cycles: int
+    power_mw_est: float = 0.0
+    valid: bool = True
+
+    @classmethod
+    def from_synth_metrics(cls, metrics: SynthMetrics | dict[str, Any]) -> "Synth":
+        """Adapt a Grok ``synth_metrics`` output into the stored block.
+
+        Selects the persisted subset only — mirrors ``Measurement.from_measure_result``.
+        Drops ``yosys_log_path`` and ``cell_count``; never dumps the whole dict.
+        ``area_um2``/``latency_cycles`` are required; ``power_mw_est``/``valid``
+        fall back to the model defaults if a caller passes only the core pair.
+        """
+        return cls(
+            area_um2=float(metrics["area_um2"]),
+            latency_cycles=int(metrics["latency_cycles"]),
+            power_mw_est=float(metrics.get("power_mw_est", 0.0)),
+            valid=bool(metrics.get("valid", True)),
+        )
 
 
 class Verification(BaseModel):
-    """Which verification layers (L1..L5) ran and whether the design passed."""
+    """Which verification layers ran (real set: L1, L4, L5) and whether passed.
+
+    The in-tree gates are ``run_l1`` (Verilator lint), ``run_l4`` (Yosys synth
+    sign-off), and ``run_l5`` (cryo budget) — see :data:`VERIFY_LAYERS`. There
+    is no L2/L3 layer, so records should not invent one.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     layers: list[str] = Field(default_factory=list)
     passed: bool = False
+
+    @classmethod
+    def from_layers(cls, layers: list[str] | None = None, *, passed: bool = False) -> "Verification":
+        """Build a verification block, defaulting to the real :data:`VERIFY_LAYERS`."""
+        return cls(layers=list(layers) if layers is not None else list(VERIFY_LAYERS), passed=passed)
 
 
 class Provenance(BaseModel):
@@ -96,14 +138,16 @@ class MemoryRecord(BaseModel):
         rtl_path: str,
         design: DesignConfig | dict[str, Any],
         measurement: MeasureResult | Measurement | dict[str, Any],
-        synth: Synth | dict[str, Any],
+        synth: SynthMetrics | Synth | dict[str, Any],
         verification: Verification | dict[str, Any],
         provenance: Provenance | dict[str, Any],
     ) -> "MemoryRecord":
         """Construct a record from Grok types directly (no hand-built dicts).
 
         ``design`` reuses ``DesignConfig.to_dict``; ``measurement`` accepts a raw
-        ``MeasureResult`` and routes through ``Measurement.from_measure_result``.
+        ``MeasureResult`` (routed via ``Measurement.from_measure_result``); ``synth``
+        accepts a raw ``synth_metrics`` output (routed via ``Synth.from_synth_metrics``,
+        which selects the stored subset and drops log path / cell_count).
         """
         design_dict = design.to_dict() if isinstance(design, DesignConfig) else dict(design)
         if isinstance(measurement, Measurement):
@@ -114,7 +158,7 @@ class MemoryRecord(BaseModel):
             rtl_path=rtl_path,
             design=design_dict,
             measurement=meas,
-            synth=synth if isinstance(synth, Synth) else Synth(**dict(synth)),
+            synth=synth if isinstance(synth, Synth) else Synth.from_synth_metrics(synth),
             verification=(
                 verification
                 if isinstance(verification, Verification)
