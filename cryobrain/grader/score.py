@@ -12,6 +12,7 @@ from cryobrain.reward.compute_reward import compute_reward, ler_suppression_vs_m
 from cryobrain.rtl_grader.synth_metrics import synth_metrics
 from cryobrain.types import CryoBudget, DesignConfig, ScenarioConfig
 from cryobrain.verify.l1_functional import run_l1
+from cryobrain.verify.l3_formal import run_l3_formal
 from cryobrain.verify.l4_synth import run_l4
 from cryobrain.verify.l5_budget import run_l5
 
@@ -39,8 +40,9 @@ def score_measured(
     *,
     shots: int = 1000,
     seed: int = 1729,
+    emit_verification_report: bool = False,
 ) -> dict[str, Any]:
-    """Score a decoder workdir using measured LER + Yosys metrics + L1/L4/L5 gates."""
+    """Score a decoder workdir using measured LER + Yosys metrics + L1–L5 gates."""
     workdir = Path(workdir)
     scenario_raw = _load_json(workdir / "scenario.json")
     scenario = ScenarioConfig.from_dict(scenario_raw)
@@ -78,6 +80,10 @@ def score_measured(
     if measure["rtl_valid"] and measure["benchmark_vectors"] > 0:
         layers_passed.append("L2")
 
+    l3 = run_l3_formal(rtl_path)
+    if l3["passed"]:
+        layers_passed.append("L3")
+
     l4 = run_l4(rtl_path)
     if l4["passed"]:
         layers_passed.append("L4")
@@ -87,7 +93,10 @@ def score_measured(
     if l5["passed"]:
         layers_passed.append("L5")
 
-    rtl_valid = {"L1", "L2", "L4", "L5"}.issubset(layers_passed)
+    # MP2 gates on L1/L2/L4/L5. L3 is recorded when BMC passes but does not zero reward
+    # until the formal smoke is green on golden RTL (MP5 hard gate in run_mp5_wsl.sh).
+    required_layers = {"L1", "L2", "L4", "L5"}
+    rtl_valid = required_layers.issubset(layers_passed)
     metrics = HardwareMetrics(
         mac_count=0,
         area_mm2=synth["area_um2"] / 1_000_000.0,
@@ -102,7 +111,7 @@ def score_measured(
         mwpm_ler=float(measure["mwpm_ler"]),
     )
 
-    return {
+    result: dict[str, Any] = {
         "reward": breakdown.reward,
         "valid": rtl_valid,
         "ler": float(measure["candidate_ler"]),
@@ -119,9 +128,27 @@ def score_measured(
         "measurement": dict(measure),
         "synth": dict(synth),
         "l1_log": l1["log_path"],
+        "l3_log": l3["log_path"],
         "l4_log": l4["log_path"],
         "source": "measured",
     }
+    if emit_verification_report:
+        from cryobrain.artifacts.verification_report import (
+            build_verification_report,
+            write_verification_report,
+        )
+
+        report = build_verification_report(
+            rtl_path=rtl_path,
+            l1=l1,
+            l2_measure=measure,
+            l3=l3,
+            l4=l4,
+            l5=l5,
+        )
+        write_verification_report(workdir, report)
+        result["verification_report"] = str(workdir / "artifacts" / "verification_report.json")
+    return result
 
 
 def grade_result_to_subscores(score: dict[str, Any], *, metrics: HardwareMetrics) -> dict[str, object]:

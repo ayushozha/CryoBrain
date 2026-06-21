@@ -204,6 +204,51 @@
     #gate-toast .reward.bad { color: var(--red); }
     #gate-toast .reward.good { color: var(--green); }
     #gate-toast .caption { font-size: 11px; color: var(--cyan); margin-top: 8px; }
+    #swarm-strip {
+      display: none;
+      border-top: 1px solid var(--border);
+      background: var(--bg-panel);
+      padding: 8px 24px 10px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    #swarm-strip.visible { display: block; }
+    #swarm-strip h3 {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    #swarm-timeline {
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+    #swarm-timeline li {
+      padding: 3px 8px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    #swarm-timeline li.result {
+      border-color: var(--green);
+      color: var(--green);
+    }
+    #swarm-timeline li.in_progress {
+      border-color: var(--cyan-dim);
+      color: var(--text-dim);
+    }
+    #data-era {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -268,6 +313,12 @@
       </div>
     </section>
   </main>
+
+  <section id="swarm-strip" aria-label="Swarm bus timeline">
+    <h3>Swarm bus</h3>
+    <ul id="swarm-timeline"></ul>
+    <div id="data-era"></div>
+  </section>
 
   <footer>
     <span class="mono" id="footer-sources"></span>
@@ -567,6 +618,32 @@
       });
     }
 
+    /* ── Swarm bus timeline (SPEC-v6 P-viz) ── */
+    function renderSwarmTimeline() {
+      const strip = $("#swarm-strip");
+      const list = $("#swarm-timeline");
+      const eraEl = $("#data-era");
+      if (!strip || !list) return;
+
+      if (DATA.data_era && eraEl) {
+        eraEl.textContent = `data era: ${DATA.data_era}`;
+      }
+
+      const timeline = DATA.swarm_timeline;
+      if (!timeline?.events?.length) {
+        strip.classList.remove("visible");
+        return;
+      }
+
+      list.innerHTML = timeline.events.map((ev) => {
+        const cls = ev.status === "result" ? "result" : "in_progress";
+        const tag = ev.status === "result" ? "measured" : "in progress";
+        const ref = ev.artifact_ref ? ` → ${ev.artifact_ref}` : "";
+        return `<li class="${cls}">${ev.agent || "?"}:${ev.action || "?"} [${tag}]${ref}</li>`;
+      }).join("");
+      strip.classList.add("visible");
+    }
+
     /* ── Gate honesty toast ── */
     async function showGateBeat() {
       const gate = DATA.gate;
@@ -623,6 +700,7 @@
       drawClimb(false);
       drawMemory(false);
       drawPareto(false);
+      renderSwarmTimeline();
 
       $("#play-story").addEventListener("click", playStory);
       document.querySelectorAll("[data-replay]").forEach((btn) => {
