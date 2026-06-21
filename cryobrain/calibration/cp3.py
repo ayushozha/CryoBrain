@@ -20,7 +20,7 @@ class RolloutVariant:
 
 
 # Ten deterministic perturbations around the d=3 starter policy.
-# Spread hardware + Stim knobs; accuracy term is flat when benchmark exactness is fixed.
+# Spread hardware + Stim knobs; accuracy term varies with design policy + scenario.
 CP3_ROLLOUT_VARIANTS: tuple[RolloutVariant, ...] = (
     RolloutVariant("base", {}, {}),
     RolloutVariant("rounds_2", {"rounds": 2}, {}),

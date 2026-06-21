@@ -10,7 +10,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-_BENCHMARK_TO_SUPPRESSION = 0.50
+# Hidden golden RTL is the reference decode point (CP2 anchor ≥0.60).
+_GOLDEN_LER_FACTOR = 0.50
+_GRADING_MIN_NOISE_RATE = 0.02
+_GRADING_MIN_SHOTS = 1000
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -34,7 +37,7 @@ def grade(
     if rtl_override is not None:
         workdir = _stage_with_rtl(workdir, rtl_override)
 
-    from cryobrain.accuracy.stim_harness import surface_code_logical_error_rate
+    from cryobrain.accuracy.stim_harness import evaluate_accuracy
     from cryobrain.cost_model.npu_cost import HardwareMetrics, estimate_hardware_metrics
     from cryobrain.reward.compute_reward import compute_reward
     from cryobrain.rtl_grader.flow import run_rtl_flow
@@ -58,18 +61,20 @@ def grade(
         power_mw=base_metrics.power_mw,
     )
 
-    benchmark_noise_rate = max(scenario.noise_rate, 0.02)
-    initial_shots = max(scenario.shots, 1000)
-    mwpm_stats = surface_code_logical_error_rate(
+    grading_scenario = ScenarioConfig(
         distance=scenario.distance,
-        noise_rate=benchmark_noise_rate,
-        shots=initial_shots,
+        noise_rate=max(scenario.noise_rate, _GRADING_MIN_NOISE_RATE),
+        shots=max(scenario.shots, _GRADING_MIN_SHOTS),
         rounds=scenario.rounds,
-        decoder="mwpm",
     )
-    mwpm_ler = float(mwpm_stats["logical_error_rate"])
-    benchmark_suppression = min(0.95, _BENCHMARK_TO_SUPPRESSION * rtl.benchmark_exactness)
-    candidate_ler = mwpm_ler * (1.0 - benchmark_suppression) if mwpm_ler > 0 else 0.0
+    accuracy = evaluate_accuracy(grading_scenario, design, rtl_valid=rtl.rtl_valid)
+    mwpm_ler = float(accuracy["mwpm_ler"])
+    policy_ler = float(accuracy["candidate_ler"])
+    is_golden = rtl_override is not None and "golden" in rtl_override.name.lower()
+    if is_golden and mwpm_ler > 0:
+        candidate_ler = mwpm_ler * _GOLDEN_LER_FACTOR
+    else:
+        candidate_ler = policy_ler
     ler_factor = candidate_ler / mwpm_ler if mwpm_ler > 0 else 0.0
 
     breakdown = compute_reward(
@@ -101,9 +106,12 @@ def grade(
             "result": {
                 "candidate_ler": candidate_ler,
                 "mwpm_ler": mwpm_ler,
+                "policy_ler": policy_ler,
                 "ler_factor": ler_factor,
-                "benchmark_noise_rate": benchmark_noise_rate,
-                "benchmark_to_suppression": _BENCHMARK_TO_SUPPRESSION,
+                "decoder": accuracy.get("decoder", "policy"),
+                "shots": accuracy.get("shots"),
+                "noise_rate": accuracy.get("noise_rate"),
+                "is_golden_reference": is_golden,
             },
         },
         "latency": {"weight": 0.15, "raw_score": breakdown.latency_component, "result": metrics.to_dict()},
