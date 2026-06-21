@@ -1,0 +1,18 @@
+// Smoke-level formal properties for cryo_brain_decoder (MP5 L3).
+// Instantiated from cryo_brain_decoder_formal_top (see cryobrain/verify/l3_formal.py).
+
+module cryo_brain_decoder_props #(
+    parameter int CONFIDENCE_WIDTH = 8
+) (
+    input logic clk,
+    input logic rst_n,
+    input logic corrections_valid,
+    input logic [CONFIDENCE_WIDTH-1:0] confidence
+);
+    // Golden decoder drives a fixed confidence tag; zero-output stubs must fail BMC.
+    always @(posedge clk) begin
+        if (rst_n) begin
+            assert (confidence == 8'd200);
+        end
+    end
+endmodule

@@ -13,6 +13,7 @@ DEMO = ROOT / "demo"
 sys.path.insert(0, str(ROOT))
 
 from cryobrain.demo.vcd_export import write_waveform_json  # noqa: E402
+from cryobrain.swarm.visualization import build_swarm_timeline  # noqa: E402
 
 MWPM_LER = 0.022
 BUDGET = {
@@ -34,6 +35,70 @@ def _slope(history: list[dict]) -> float:
     start = float(history[0].get("reward", 0.0))
     end = float(history[-1].get("reward", 0.0))
     return (end - start) / max(len(history) - 1, 1)
+
+
+def _normalize_measured_climb(measured: dict) -> dict:
+    """Adapt measured_climb.json for the dashboard reward chart."""
+    rows = measured.get("history") or []
+    history = [
+        {
+            "step": row["step"],
+            "reward": float(row["suppression"]),
+            "candidate_ler": float(row.get("candidate_ler", 0.0)),
+            "suppression": float(row.get("suppression", 0.0)),
+            "rtl_hash": row.get("rtl_hash"),
+        }
+        for row in rows
+        if isinstance(row, dict) and "step" in row and "suppression" in row
+    ]
+    out: dict = {
+        "backend": measured.get("backend", "measured"),
+        "reward_source": measured.get("reward_source", "score_measured"),
+        "history": history,
+    }
+    if history:
+        out["summary"] = {
+            "start_reward": history[0]["reward"],
+            "end_reward": history[-1]["reward"],
+        }
+    return out
+
+
+def _memory_from_measured(ab: dict) -> dict | None:
+    """Adapt measured_memory_ab.json to the dashboard memory overlay shape."""
+
+    def _side(rows: list | None) -> dict | None:
+        if not isinstance(rows, list) or not rows:
+            return None
+        history = [
+            {"step": row["step"], "reward": float(row["suppression"])}
+            for row in rows
+            if isinstance(row, dict) and "step" in row and "suppression" in row
+        ]
+        if not history:
+            return None
+        return {
+            "end_reward": history[-1]["reward"],
+            "slope": round(_slope(history), 6),
+            "history": history,
+        }
+
+    without = _side(ab.get("without_memory"))
+    with_side = _side(ab.get("with_memory"))
+    if not without or not with_side:
+        return None
+
+    rebuilt = {
+        "ok": True,
+        "without_memory": without,
+        "with_memory": with_side,
+        "memory_wins": with_side["end_reward"] >= without["end_reward"],
+    }
+    if without["slope"] > 0:
+        rebuilt["slope_ratio"] = round(with_side["slope"] / without["slope"], 2)
+    else:
+        rebuilt["slope_ratio"] = None
+    return rebuilt
 
 
 def _memory_overlay(
@@ -112,9 +177,10 @@ def _pareto_points(designs: list | None) -> list[dict]:
         area_mm2 = float(row.get("area_mm2", 0.0))
         latency = int(row.get("latency_cycles", row.get("latency", 0)) or 0)
         hard = list(row.get("hard_caps") or [])
+        reward = float(row.get("reward", 0.0))
         fits = (
             reward > 0
-            if (reward := float(row.get("reward", 0.0))) > 0
+            if reward > 0
             else not hard
             and latency <= BUDGET["max_latency_cycles"]
             and area_mm2 <= BUDGET["max_area_mm2"]
@@ -130,26 +196,99 @@ def _pareto_points(designs: list | None) -> list[dict]:
                 "latency_cycles": latency or 12,
                 "power_mw": float(row.get("power_mw", 0.0)),
                 "fits_budget": bool(fits and not hard),
-                "reward": float(row.get("reward", 0.0)),
+                "reward": reward,
                 "is_winner": name == best_name,
             }
         )
     return points
 
 
-def build_bundle() -> dict:
-    vcd = ARTIFACTS / "cryo_golden_trace.vcd"
-    waveform = write_waveform_json(vcd, ARTIFACTS / "waveform.json") if vcd.is_file() else None
+def _pareto_from_measured(measured: dict) -> list[dict]:
+    raw_points = measured.get("points") or []
+    if not isinstance(raw_points, list):
+        return []
 
-    climb = _load(ARTIFACTS / "climb_chart_rl.json") or _load(ARTIFACTS / "climb_chart.json")
-    no_mem = _load(ARTIFACTS / "climb_chart_no_memory.json")
-    with_mem = _load(ARTIFACTS / "climb_chart_memory.json")
-    memory = _memory_overlay(no_mem, with_mem, _load(ARTIFACTS / "memory_ab_overlay.json"))
+    candidates = [p for p in raw_points if isinstance(p, dict) and p.get("ler") is not None]
+    if not candidates:
+        return []
 
-    designs = _load(ARTIFACTS / "designs.json") or _load(ARTIFACTS / "designs_rl.json")
-    pareto = _pareto_points(designs if isinstance(designs, list) else None)
+    frontier = [p for p in candidates if p.get("on_frontier")]
+    pool = frontier or candidates
+    best = min(pool, key=lambda p: (float(p["ler"]), float(p.get("area_um2", 0.0))))
+    best_label = str(best.get("label", ""))
+    max_area_um2 = BUDGET["max_area_mm2"] * 1_000_000
 
-    cp5_audit = _load(ARTIFACTS / "cp5_audit.json")
+    points: list[dict] = []
+    for row in candidates:
+        label = str(row.get("label", "design"))
+        ler = float(row["ler"])
+        area_um2 = float(row.get("area_um2", 0.0))
+        latency = int(row.get("latency_cycles", 12) or 12)
+        suppression = max(0.0, 1.0 - ler / MWPM_LER) if MWPM_LER else 0.0
+        points.append(
+            {
+                "label": label,
+                "kind": "policy",
+                "ler": round(ler, 6),
+                "area_um2": round(area_um2, 3),
+                "latency_cycles": latency,
+                "power_mw": 0.0,
+                "fits_budget": latency <= BUDGET["max_latency_cycles"] and area_um2 <= max_area_um2,
+                "reward": round(suppression, 6),
+                "is_winner": label == best_label,
+            }
+        )
+    return points
+
+
+def _resolve_data_era(*eras: str) -> str:
+    unique = set(eras)
+    if unique == {"measured"}:
+        return "measured"
+    if unique == {"proxy"}:
+        return "proxy"
+    return "mixed"
+
+
+def build_bundle(artifacts_dir: Path | None = None) -> dict:
+    artifacts = artifacts_dir or ARTIFACTS
+    vcd = artifacts / "cryo_golden_trace.vcd"
+    waveform = write_waveform_json(vcd, artifacts / "waveform.json") if vcd.is_file() else None
+
+    climb_era = "proxy"
+    climb_source = "artifacts/climb_chart_rl.json"
+    measured_climb = _load(artifacts / "measured_climb.json")
+    if isinstance(measured_climb, dict) and measured_climb.get("history"):
+        climb = _normalize_measured_climb(measured_climb)
+        climb_era = "measured"
+        climb_source = "artifacts/measured_climb.json"
+    else:
+        climb = _load(artifacts / "climb_chart_rl.json") or _load(artifacts / "climb_chart.json")
+
+    memory_era = "proxy"
+    memory_source = "artifacts/memory_ab_overlay.json"
+    measured_memory = _load(artifacts / "measured_memory_ab.json")
+    memory = _memory_from_measured(measured_memory) if isinstance(measured_memory, dict) else None
+    if memory:
+        memory_era = "measured"
+        memory_source = "artifacts/measured_memory_ab.json"
+    else:
+        no_mem = _load(artifacts / "climb_chart_no_memory.json")
+        with_mem = _load(artifacts / "climb_chart_memory.json")
+        memory = _memory_overlay(no_mem, with_mem, _load(artifacts / "memory_ab_overlay.json"))
+
+    pareto_era = "proxy"
+    pareto_source = "artifacts/designs.json"
+    measured_pareto = _load(artifacts / "measured_pareto.json")
+    if isinstance(measured_pareto, dict) and measured_pareto.get("points"):
+        pareto = _pareto_from_measured(measured_pareto)
+        pareto_era = "measured"
+        pareto_source = "artifacts/measured_pareto.json"
+    else:
+        designs = _load(artifacts / "designs.json") or _load(artifacts / "designs_rl.json")
+        pareto = _pareto_points(designs if isinstance(designs, list) else None)
+
+    cp5_audit = _load(artifacts / "cp5_audit.json")
     yosys_area_um2 = 6.0
     if isinstance(cp5_audit, dict):
         yosys_area_um2 = float(cp5_audit.get("area_estimate_um2", yosys_area_um2))
@@ -167,18 +306,25 @@ def build_bundle() -> dict:
         cal = json.loads(gate_path.read_text(encoding="utf-8"))
         gate["golden"]["reward"] = float(cal.get("golden_reward", 0.629))
 
+    swarm_timeline = build_swarm_timeline(artifacts / "swarm" / "event_log.jsonl")
+
     return {
+        "data_era": _resolve_data_era(climb_era, memory_era, pareto_era),
         "waveform": waveform,
         "climb": climb,
         "memory": memory,
         "pareto": {"budget": BUDGET, "yosys_area_um2": yosys_area_um2, "points": pareto},
         "gate": gate,
+        "swarm_timeline": swarm_timeline,
         "sources": {
             "waveform": "artifacts/waveform.json",
-            "climb": "artifacts/climb_chart_rl.json",
-            "memory": "artifacts/memory_ab_overlay.json",
-            "pareto": "artifacts/designs.json",
+            "climb": climb_source,
+            "memory": memory_source,
+            "pareto": pareto_source,
             "gate": "CP2 validity gate",
+            "climb_era": climb_era,
+            "memory_era": memory_era,
+            "pareto_era": pareto_era,
         },
     }
 

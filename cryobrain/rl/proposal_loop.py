@@ -1,8 +1,10 @@
-"""Measured proposal step (SPEC-v5 C5 / MP3).
+"""Measured proposal step (SPEC-v5 C5 / MP3, SPEC-v6 P-exec).
 
 The single reusable unit of the measured loop. One ``run_proposal_step`` does:
 
-    propose DesignConfig -> generate_rtl -> [verify + measure + synth + score] -> memory
+    research -> propose DesignConfig -> generate_rtl -> [verify + measure + score] -> memory
+
+Tier-2 executor steps emit to the swarm event bus (SPEC-v6 §2) in pipeline order.
 
 The bracketed middle is **one measured boundary**: Grok's
 :func:`cryobrain.grader.score.score_measured`. It already runs the L1/L4/L5
@@ -34,7 +36,17 @@ from cryobrain.grader.score import score_measured
 from cryobrain.memory.models import MemoryRecord, Verification
 from cryobrain.memory.store import MemoryStore, rtl_hash
 from cryobrain.rtl_gen.generator import generate_rtl
-from cryobrain.types import DesignConfig
+from cryobrain.swarm.event_bus import EventBus
+from cryobrain.swarm.executors import (
+    architect_propose_step,
+    measure_step,
+    memory_step,
+    research_step,
+    rtl_generate_step,
+    score_step,
+    verify_step,
+)
+from cryobrain.types import CryoBudget, DesignConfig
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK_ROOT = ROOT / "tasks" / "cryo_brain_decoder"
@@ -115,23 +127,74 @@ def run_proposal_step(
     shots: int = 1000,
     seed: int = 1729,
     task_root: Path = TASK_ROOT,
+    bus: EventBus | None = None,
 ) -> StepResult:
-    """One measured step: generate -> verify+measure+synth+score -> record.
+    """One measured step: research -> propose -> RTL -> measure -> verify -> score -> memory.
 
-    A memory record is written (via ``record_variant``) only when the variant is
-    measured-valid (all gated layers passed inside ``score_measured``). An invalid
-    variant carries reward 0.0 and is NOT recorded — verification failure both
-    zeroes the reward and rejects the variant from memory.
+    Executor events are appended in SPEC-v6 pipeline order. The measured numbers
+    still come from a single ``score_fn`` boundary (default ``score_measured``)
+    so trainers can monkeypatch one function. Measurement and verification bus
+    events replay that score's sub-fields without re-running Verilator.
+
+    A memory record is written only when the variant is measured-valid. Invalid
+    variants carry reward 0.0 and are NOT recorded.
     """
-    reward, score, rtl_path = measured_reward(
-        design,
-        scenario,
+    bus = bus or EventBus()
+    design_id = f"d{step:03d}"
+
+    research_step(bus, design_id)
+    architect_propose_step(bus, design_id, design)
+
+    workdir = stage_workdir(task_root, scenario=scenario, design=design.to_dict())
+    rtl_path = rtl_generate_step(bus, design_id, design, workdir / "rtl")
+
+    # Single monkeypatchable measured boundary.
+    score = score_step(
+        bus,
+        design_id,
+        workdir,
         score_fn=score_fn,
         shots=shots,
         seed=seed,
-        task_root=task_root,
+        emit=False,
     )
 
+    measurement = score.get("measurement")
+    if measurement is None:
+        measurement = {
+            "candidate_ler": float(score.get("ler", 1.0)),
+            "mwpm_ler": float(score.get("mwpm_ler", 0.0)),
+            "suppression": float(score.get("suppression", 0.0)),
+            "rtl_valid": bool(score.get("valid", False)),
+            "benchmark_vectors": int(
+                (score.get("measurement") or {}).get("benchmark_vectors", 0)
+            ),
+        }
+    measure_step(
+        bus,
+        design_id,
+        rtl_path,
+        scenario,
+        measurement=measurement,
+        shots=shots,
+        seed=seed,
+    )
+    verify_step(
+        bus,
+        design_id,
+        rtl_path,
+        budget=CryoBudget.from_dict(
+            {
+                "max_latency_cycles": int(scenario.get("max_latency_cycles", 64)),
+                "max_area_mm2": float(scenario.get("max_area_mm2", 0.06)),
+                "max_power_mw": float(scenario.get("max_power_mw", 8.0)),
+            }
+        ),
+        layers_passed=list(score.get("layers_passed", [])),
+    )
+    score_step(bus, design_id, workdir, score=score, emit=True)
+
+    reward = float(score["reward"])
     valid = bool(score.get("valid", False))
     candidate_ler = float(score.get("ler", 1.0))
     suppression = float(score.get("suppression", 0.0))
@@ -148,10 +211,11 @@ def run_proposal_step(
             score=score,
             layers_passed=layers_passed,
             backend=backend,
+            bus=bus,
+            design_id=design_id,
         )
         recorded = True
     else:
-        # Stable identity even for rejected variants (climb provenance).
         try:
             digest = rtl_hash(rtl_path)
         except (FileNotFoundError, OSError):
@@ -181,6 +245,8 @@ def _record_measured(
     score: dict[str, Any],
     layers_passed: list[str],
     backend: str,
+    bus: EventBus | None = None,
+    design_id: str | None = None,
 ) -> str:
     """Persist a measured, verified variant; return its rtl_hash.
 
@@ -207,4 +273,6 @@ def _record_measured(
         provenance={"step": step, "backend": backend},
     )
     target = store if store is not None else MemoryStore()
+    if bus is not None and design_id is not None:
+        return memory_step(bus, design_id, target, record)
     return target.record_variant(record)
