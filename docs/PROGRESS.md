@@ -1,49 +1,58 @@
 # CryoBrain — Progress Summary
 
-> **Current truth (SPEC-v6, measured artifacts):** see [`PROGRESS_UPDATE_2026-06-21.md`](PROGRESS_UPDATE_2026-06-21.md). This file is a longer SPEC-v5-era archive; sections below may be stale.
-
 **Last updated:** 2026-06-21
+
 **Repo:** https://github.com/ayushozha/CryoBrain
-**Branch:** `main` only (all feature branches merged and deleted)
-**Canonical spec:** [`docs/specs/SPEC-v5.md`](specs/SPEC-v5.md)
+
+**Branch:** `feat/real-measured-artifacts` (PR [#20](https://github.com/ayushozha/CryoBrain/pull/20)) — measured artifacts + SPEC-v6 §2.5
+
+**Canonical spec:** [`docs/specs/SPEC-v6.md`](specs/SPEC-v6.md) — nine-role swarm, event bus, honest claim ladder, 2-min demo
+
+**Latest snapshot:** [`PROGRESS_UPDATE_2026-06-21.md`](PROGRESS_UPDATE_2026-06-21.md)
+
 **Reality audit:** [`SPEC_REALITY_AUDIT.md`](SPEC_REALITY_AUDIT.md)
+
 **Agent orchestration:** [`docs/agents/README.md`](agents/README.md)
+
+**SPEC-v5** remains the measured-engine reference (MP0–MP2 APIs); **SPEC-v6** is the active product spec. See [`specs/README.md`](specs/README.md).
 
 ---
 
-## North star (SPEC-v5)
+## North star (SPEC-v6)
 
-CryoBrain is a **measured** verifiable RL environment for cryogenic QEC decoder co-design:
+CryoBrain is a **self-improving AI hardware lab**: a swarm of agents researches, proposes, generates, verifies, measures, scores, remembers, and improves decoder designs — every improvement grounded in real Stim + Verilator + Yosys measurements.
 
-1. **P0** — Candidate LER from Stim vectors → Verilator RTL (no proxy formulas).
-2. **P1** — Parametric RTL generator + per-variant Yosys metrics.
-3. **P2** — Model proposes designs; reward-ranked learning + memory; GRPO on Modal.
-4. **L1–L5** — Verification stack gates every score.
-5. **GEN** — Same env on a second RTL target (FIFO) for platform proof.
+**Slow loop (built):** Research → Planner → Architect → RTL → Measurement → Verifier → Scorer → Memory — coordinated on the event bus.
+
+**Fast loop (vision):** Real-time NPU inside the fridge — 2040 arc, never demo as done today.
 
 **Keystone rule:** worse RTL → worse measured LER. No proxy formula LER in production paths.
 
----
-
-## Status at a glance
-
-| Area | Status | Notes |
-|------|--------|-------|
-| **SPEC-v5 measured spine (Grok)** | **MP0–MP2 green** | `measure_candidate_ler`, `synth_metrics`, `score_measured` |
-| **Proxy LER** | **Removed + guarded** | `decoder_policy.py` deleted; `audit_reward_path.sh` + pytest guards on `main` |
-| **Parametric RTL** | **MP1 green** | `cryobrain/rtl_gen/generator.py` — 3 presets → distinct area + LER |
-| **Verification layers** | **L1, L4, L5 landed** | L3 formal (Codex X3) + verification report (X7) pending for MP5 |
-| **Learning loop (Claude)** | **Code on `main`** | Measured `local_trainer.py`, memory store, GRPO, Modal fan-out — **WSL artifact run pending** |
-| **Measured artifacts** | **Not checked in** | No `measured_climb.json` / `measured_memory_ab.json` / `measured_pareto.json` on disk yet |
-| **Demo dashboard** | **Offline shell green** | Still bundles **proxy-era** climb/memory JSON — truth-up blocked on measured artifacts |
-| **GEN (FIFO)** | **Code landed** | `tasks/async_fifo/`, `fifo_generator.py`, `run_gen_fifo_wsl.sh` |
-| **GitHub** | **Single-branch** | `ayushozha/CryoBrain` · PRs #1–#17 merged · only `main` remains |
-| **HUD / sponsors** | **Integrated** | Fireworks proposer, Exa context pack, Daytona sandbox, Modal measure, HUD smoke |
-| **Tests** | **207 pytest** | +99 since last doc; Claude + Codex suites on `main` |
-
-**Overall (SPEC-v5 definition of done): ~65%** — measured spine + full Claude/Codex code paths on `main`; WSL artifact generation, demo truth-up, and MP5 formal layer remain.
+**Research adoption (§2.5):** New Exa literature must bias trained agents and tag verified winners — spec'd; wiring partial.
 
 ---
+
+## Status at a glance (SPEC-v6)
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| **MP0–MP2** (measured spine) | **Green** | WSL gates pass |
+| **P-gate** (Architect climb + memory A/B) | **Green** | `measured_climb.json`, `measured_memory_ab.json` on disk |
+| **P-bus / P-exec / P-viz** | **Built** | Event bus, executors, demo swarm strip |
+| **P-train2** (Planner) | **Built** | `planner.py`, `planner_trainer.py` |
+| **P-research** (Exa → self-adopt) | **Partial** | `context_pack` emitted; §2.5 closed loop open |
+| **Demo** | **Measured-only** | `build_demo.py` requires `measured_*.json`; `data_era: "measured"` |
+| **P-gen** (FIFO) | **Code only** | `run_gen_fifo_wsl.sh` not proven in WSL |
+| **Climb quality** | **Partial** | 1/3–1/5 steps accepted (golden only; mutants fail L2) |
+| **Tests** | **237 pytest** | Collected locally |
+
+**Overall (SPEC-v6 definition of done): ~75%** — demo-honest measured story ready; adoption wiring, multi-step climb, FIFO proof, rehearsal remain.
+
+---
+
+## Historical — SPEC-v5 milestone IDs (engineering spine)
+
+The v5 IDs (MP0–MP5, C1–C10, X1–X10) map to the same modules. Tables below use v5 labels; v6 phase names (P-gate, P-bus, …) are in [`SPEC-v6.md`](specs/SPEC-v6.md) §6.
 
 ## SPEC-v5 milestones (measured)
 

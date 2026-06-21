@@ -6,7 +6,7 @@
 
 **Repo:** https://github.com/ayushozha/CryoBrain
 
-**Prior summary:** [`docs/PROGRESS.md`](PROGRESS.md) (stale — written for SPEC-v5; use this doc for current truth)
+**Living summary:** [`docs/PROGRESS.md`](PROGRESS.md) (SPEC-v6 header + this dated snapshot)
 
 ---
 
