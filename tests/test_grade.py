@@ -1,4 +1,4 @@
-"""Grade-path tests: Stim policy LER spread + golden reference anchor."""
+"""Grade-path tests: measured scoring contract."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import importlib.util
 from pathlib import Path
 
 from cryobrain.accuracy.stim_harness import evaluate_accuracy
-from cryobrain.reward.compute_reward import ler_suppression_vs_mwpm
 from cryobrain.types import DesignConfig, ScenarioConfig
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,13 +20,14 @@ def _load_grade_module():
     return mod
 
 
-def test_grade_module_exposes_golden_reference_factor():
-    grade_mod = _load_grade_module()
-    assert grade_mod._GOLDEN_LER_FACTOR == 0.50
+def test_grade_module_wires_score_measured():
+    text = GRADE_PATH.read_text(encoding="utf-8")
+    assert "score_measured" in text
+    assert "decoder_policy" not in text
 
 
-def test_evaluate_accuracy_spreads_ler_suppression_across_designs():
-    """Design knobs must move the continuous accuracy axis (CP6 / F5)."""
+def test_evaluate_accuracy_fail_closed_without_measured_rtl():
+    """Design knobs must not move accuracy without measured RTL evidence."""
     scenario = ScenarioConfig(distance=3, noise_rate=0.02, shots=800, rounds=3)
     designs = (
         DesignConfig(),
@@ -38,14 +38,9 @@ def test_evaluate_accuracy_spreads_ler_suppression_across_designs():
         float(evaluate_accuracy(scenario, design, rtl_valid=True)["ler_suppression_vs_mwpm"])
         for design in designs
     ]
-    assert max(suppressions) - min(suppressions) >= 0.02
+    assert suppressions == [0.0, 0.0, 0.0]
 
 
-def test_golden_reference_suppression_matches_cp2_anchor():
-    scenario = ScenarioConfig(distance=3, noise_rate=0.02, shots=800, rounds=3)
-    design = DesignConfig()
-    accuracy = evaluate_accuracy(scenario, design, rtl_valid=True)
-    mwpm_ler = float(accuracy["mwpm_ler"])
-    golden_ler = mwpm_ler * 0.50
-    suppression = ler_suppression_vs_mwpm(golden_ler, mwpm_ler)
-    assert suppression == 0.50
+def test_grade_imports_without_proxy_symbols():
+    grade_mod = _load_grade_module()
+    assert hasattr(grade_mod, "grade")

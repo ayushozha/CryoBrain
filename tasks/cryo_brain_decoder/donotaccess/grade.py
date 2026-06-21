@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hidden grader: validity gate + continuous LER/hardware reward."""
+"""Hidden grader: measured LER + Yosys hardware reward (SPEC-v5 G10)."""
 
 from __future__ import annotations
 
@@ -9,17 +9,6 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-
-# Hidden golden RTL is the reference decode point (CP2 anchor ≥0.60).
-_GOLDEN_LER_FACTOR = 0.50
-_GRADING_MIN_NOISE_RATE = 0.02
-_GRADING_MIN_SHOTS = 1000
-
-
-def _load_json(path: Path) -> dict[str, object]:
-    if not path.is_file():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _stage_with_rtl(workdir: Path, rtl_src: Path) -> Path:
@@ -34,97 +23,38 @@ def grade(
     rtl_override: Path | None = None,
     hidden_root: Path | None = None,
 ) -> dict[str, object]:
+    _ = hidden_root
     if rtl_override is not None:
         workdir = _stage_with_rtl(workdir, rtl_override)
 
-    from cryobrain.accuracy.stim_harness import evaluate_accuracy
-    from cryobrain.cost_model.npu_cost import HardwareMetrics, estimate_hardware_metrics
-    from cryobrain.reward.compute_reward import compute_reward
-    from cryobrain.rtl_grader.flow import run_rtl_flow
-    from cryobrain.types import CryoBudget, DesignConfig, ScenarioConfig
+    from cryobrain.cost_model.npu_cost import HardwareMetrics
+    from cryobrain.grader.score import grade_result_to_subscores, score_measured
 
-    scenario_raw = _load_json(workdir / "scenario.json")
-    scenario = ScenarioConfig.from_dict(scenario_raw)
-    design = DesignConfig.from_dict(_load_json(workdir / "design_config.json"))
-    budget = CryoBudget(
-        max_latency_cycles=int(scenario_raw.get("max_latency_cycles", 64)),
-        max_area_mm2=float(scenario_raw.get("max_area_mm2", 0.06)),
-        max_power_mw=float(scenario_raw.get("max_power_mw", 8.0)),
-    )
-
-    rtl = run_rtl_flow(workdir, golden_mode=rtl_override is not None and "golden" in rtl_override.name.lower())
-    base_metrics = estimate_hardware_metrics(design)
+    score = score_measured(workdir)
     metrics = HardwareMetrics(
-        mac_count=base_metrics.mac_count,
-        area_mm2=max(base_metrics.area_mm2, rtl.area_estimate),
-        latency_cycles=rtl.latency_cycles if rtl.rtl_valid else base_metrics.latency_cycles,
-        power_mw=base_metrics.power_mw,
+        mac_count=0,
+        area_mm2=score["area_um2"] / 1_000_000.0,
+        latency_cycles=score["latency_cycles"],
+        power_mw=score["power_mw"],
     )
-
-    grading_scenario = ScenarioConfig(
-        distance=scenario.distance,
-        noise_rate=max(scenario.noise_rate, _GRADING_MIN_NOISE_RATE),
-        shots=max(scenario.shots, _GRADING_MIN_SHOTS),
-        rounds=scenario.rounds,
-    )
-    accuracy = evaluate_accuracy(grading_scenario, design, rtl_valid=rtl.rtl_valid)
-    mwpm_ler = float(accuracy["mwpm_ler"])
-    policy_ler = float(accuracy["candidate_ler"])
-    is_golden = rtl_override is not None and "golden" in rtl_override.name.lower()
-    if is_golden and mwpm_ler > 0:
-        candidate_ler = mwpm_ler * _GOLDEN_LER_FACTOR
-    else:
-        candidate_ler = policy_ler
-    ler_factor = candidate_ler / mwpm_ler if mwpm_ler > 0 else 0.0
-
-    breakdown = compute_reward(
-        rtl_valid=rtl.rtl_valid,
-        metrics=metrics,
-        budget=budget,
-        candidate_ler=candidate_ler,
-        mwpm_ler=mwpm_ler,
-    )
-
-    subscores = {
-        "rtl_validity": {
-            "weight": 0.0,
-            "raw_score": 1.0 if rtl.rtl_valid else 0.0,
-            "result": {
-                "sim": rtl.sim_passed,
-                "synth": rtl.synth_passed,
-                "lint": rtl.lint_passed,
-                "tools_available": rtl.tools_available,
-                "benchmark_vectors": rtl.benchmark_vectors,
-                "benchmark_failures": rtl.benchmark_failures,
-                "benchmark_exactness": rtl.benchmark_exactness,
-                "benchmark_confidence": rtl.benchmark_confidence,
-            },
-        },
-        "ler_suppression": {
-            "weight": 0.7,
-            "raw_score": breakdown.ler_suppression_vs_mwpm,
-            "result": {
-                "candidate_ler": candidate_ler,
-                "mwpm_ler": mwpm_ler,
-                "policy_ler": policy_ler,
-                "ler_factor": ler_factor,
-                "decoder": accuracy.get("decoder", "policy"),
-                "shots": accuracy.get("shots"),
-                "noise_rate": accuracy.get("noise_rate"),
-                "is_golden_reference": is_golden,
-            },
-        },
-        "latency": {"weight": 0.15, "raw_score": breakdown.latency_component, "result": metrics.to_dict()},
-        "area": {"weight": 0.15, "raw_score": breakdown.area_component, "result": metrics.to_dict()},
-    }
+    subscores = grade_result_to_subscores(score, metrics=metrics)
 
     return {
-        "reward": breakdown.reward,
-        "hard_caps": breakdown.hard_caps,
+        "reward": score["reward"],
+        "hard_caps": score["hard_caps"],
         "subscores": subscores,
         "info": {
-            **breakdown.to_dict(),
-            "rtl_logs": rtl.logs,
+            "valid": score["valid"],
+            "ler": score["ler"],
+            "mwpm_ler": score["mwpm_ler"],
+            "suppression": score["suppression"],
+            "layers_passed": score["layers_passed"],
+            "area_um2": score["area_um2"],
+            "latency_cycles": score["latency_cycles"],
+            "power_mw": score["power_mw"],
+            "source": "measured",
+            "measurement": score.get("measurement"),
+            "synth": score.get("synth"),
         },
     }
 

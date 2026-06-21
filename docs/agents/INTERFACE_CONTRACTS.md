@@ -37,12 +37,15 @@ def synth_metrics(rtl_path: Path) -> SynthMetrics: ...
 
 **MP1:** `wsl bash scripts/run_mp1_wsl.sh` — 3 presets → 3 distinct cell counts + LER spread.
 
-## `score_measured` — Grok G10 (MP2)
+## `score_measured` — Grok G10 (MP2) ✅
 
 ```python
-# cryobrain/grader/score.py  — not yet landed
-def score_measured(workdir: Path) -> dict: ...
+# cryobrain/grader/score.py
+def score_measured(workdir: Path, *, shots: int = 1000, seed: int = 1729) -> dict: ...
+# reward, valid, ler, area_um2, latency_cycles, power_mw, layers_passed, source="measured"
 ```
+
+**MP2:** `wsl bash scripts/run_mp2_wsl.sh`
 
 ## Stim manifest — Grok G2
 
@@ -59,3 +62,22 @@ def holdout_paths() -> list[str]: ...
 DesignConfig  # dataclass in cryobrain.types
 validate_design(design) -> None
 ```
+
+## Artifact schema v2 - Codex X5
+
+```python
+# cryobrain/artifacts/schemas/v2
+validate_measured_climb(artifact) -> dict
+validate_pareto(artifact) -> dict
+validate_measured_memory_ab(artifact) -> dict
+```
+
+Measured artifact contracts:
+
+| Artifact | Required payload |
+|---|---|
+| `artifacts/measured_climb.json` | `history[].{step, candidate_ler, suppression, rtl_hash}` |
+| `artifacts/measured_pareto.json` | `points[].{label, ler, area_um2, latency_cycles, rtl_path}` |
+| `artifacts/measured_memory_ab.json` | `with_memory[]` and `without_memory[]` rows matching measured climb rows |
+
+Validators reject proxy/formula fields recursively; measured artifacts must be derived from RTL measurement outputs.
