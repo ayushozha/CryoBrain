@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CryoBrain — Live Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0e14;
+      --bg-panel: #0d1219;
+      --border: #1a2535;
+      --cyan: #3dd6f5;
+      --cyan-dim: #1e4a5c;
+      --text: #b8c5d6;
+      --text-dim: #5a6b7d;
+      --green: #3dff9a;
+      --red: #ff4d6a;
+      --mono: "IBM Plex Mono", monospace;
+      --sans: "IBM Plex Sans", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+    }
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
+    }
+    header {
+      padding: 14px 24px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--cyan);
+      text-shadow: 0 0 24px rgba(61, 214, 245, 0.25);
+    }
+    .brand p {
+      margin-top: 4px;
+      max-width: 720px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text-dim);
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    button {
+      font-family: var(--sans);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border: 1px solid var(--cyan-dim);
+      background: rgba(61, 214, 245, 0.06);
+      color: var(--cyan);
+      cursor: pointer;
+      border-radius: 2px;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    button:hover { background: rgba(61, 214, 245, 0.14); }
+    button.primary {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(61, 214, 245, 0.15);
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      min-height: 0;
+    }
+    .panel {
+      background: var(--bg-panel);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      position: relative;
+    }
+    .panel.active { box-shadow: inset 0 0 0 1px var(--cyan); }
+    .panel-head {
+      padding: 10px 14px 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-head h2 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text);
+    }
+    .panel-head .tagline {
+      font-size: 10px;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    .panel-body {
+      flex: 1;
+      min-height: 0;
+      padding: 8px 12px 4px;
+      position: relative;
+    }
+    .panel-body svg, .panel-body canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .panel-foot {
+      padding: 4px 14px 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .panel-foot .source { font-family: var(--mono); }
+    .panel-foot button.replay {
+      padding: 3px 8px;
+      font-size: 10px;
+    }
+    .headline {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--green);
+      text-shadow: 0 0 8px rgba(61, 255, 154, 0.3);
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .headline.visible { opacity: 1; }
+    .awaiting {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    footer {
+      padding: 8px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    footer .mono { font-family: var(--mono); }
+    footer .close { max-width: 420px; text-align: right; line-height: 1.4; }
+    #gate-toast {
+      position: fixed;
+      top: 72px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-8px);
+      background: rgba(13, 18, 25, 0.95);
+      border: 1px solid var(--border);
+      padding: 14px 20px;
+      border-radius: 2px;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s, transform 0.3s;
+      text-align: center;
+      min-width: 280px;
+    }
+    #gate-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #gate-toast .label { font-size: 10px; color: var(--text-dim); margin-bottom: 6px; }
+    #gate-toast .reward {
+      font-family: var(--mono);
+      font-size: 18px;
+      margin: 4px 0;
+    }
+    #gate-toast .reward.bad { color: var(--red); }
+    #gate-toast .reward.good { color: var(--green); }
+    #gate-toast .caption { font-size: 11px; color: var(--cyan); margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>CryoBrain</h1>
+      <p>A verifiable RL environment that drives quantum-decoder design optimization against a real physics + hardware reward — and compounds with memory.</p>
+    </div>
+    <div class="controls">
+      <button class="primary" id="play-story">&#9654; Play story</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel" id="panel-a" data-panel="waveform">
+      <div class="panel-head">
+        <h2>Panel A — Waveform</h2>
+        <span class="tagline">The chip, running</span>
+      </div>
+      <div class="panel-body" id="body-a"></div>
+      <div class="panel-foot">
+        <span class="source" id="source-a"></span>
+        <button class="replay" data-replay="waveform">Replay</button>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-b" data-panel="climb">
+      <div class="panel-head">
+        <h2>Panel B — Climb</h2>
+        <span class="tagline">It improves (the spine)</span>
+      </div>
+      <div class="panel-body" id="body-b"></div>
+      <div class="panel-foot">
+        <span class="source" id="source-b"></span>
+        <button class="replay" data-replay="climb">Replay</button>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-c" data-panel="memory">
+      <div class="panel-head">
+        <h2>Panel C — Memory A/B</h2>
+        <span class="tagline">It compounds</span>
+      </div>
+      <div class="panel-body" id="body-c">
+        <div class="headline" id="memory-headline"></div>
+      </div>
+      <div class="panel-foot">
+        <span class="source" id="source-c"></span>
+        <button class="replay" data-replay="memory">Replay</button>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-d" data-panel="pareto">
+      <div class="panel-head">
+        <h2>Panel D — Pareto</h2>
+        <span class="tagline">Accurate AND fits the fridge</span>
+      </div>
+      <div class="panel-body" id="body-d"></div>
+      <div class="panel-foot">
+        <span class="source" id="source-d"></span>
+        <button class="replay" data-replay="pareto">Replay</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span class="mono" id="footer-sources"></span>
+    <span class="close">Verifiable hardware-design environments — sellable to labs today; quantum is the moonshot. Memory is the compounding asset.</span>
+  </footer>
+
+  <div id="gate-toast">
+    <div class="label" id="gate-label"></div>
+    <div class="reward" id="gate-reward"></div>
+    <div class="caption">reward can&rsquo;t be gamed</div>
+  </div>
+
+  <script>
+    const DATA = /*__DEMO_DATA__*/;
+
+    const $ = (sel) => document.querySelector(sel);
+    const mono = (n, d = 3) => (n == null || Number.isNaN(n) ? "—" : Number(n).toFixed(d));
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    function setSource(id, key) {
+      const el = $(`#source-${id}`);
+      if (el && DATA.sources && DATA.sources[key]) {
+        el.textContent = `source: ${DATA.sources[key]}`;
+      }
+    }
+
+    function showAwaiting(container) {
+      container.innerHTML = '<div class="awaiting">awaiting artifact</div>';
+    }
+
+    function highlightPanel(name) {
+      document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+      const map = { waveform: "a", climb: "b", memory: "c", pareto: "d" };
+      const id = map[name];
+      if (id) $(`#panel-${id}`)?.classList.add("active");
+    }
+
+    /* ── Panel A: Waveform ── */
+    let waveTimer = null;
+    let waveIdx = 0;
+
+    function drawWaveformFrame(idx) {
+      const w = DATA.waveform;
+      const body = $("#body-a");
+      if (!w || !w.samples || !w.samples.length) { showAwaiting(body); return; }
+
+      const signals = ["syndromes_valid", "syndromes", "corrections_valid", "corrections"];
+      const labels = ["syndrome valid", "syndrome", "correction valid", "correction"];
+      const W = body.clientWidth || 600;
+      const H = body.clientHeight || 200;
+      const pad = { l: 90, r: 16, t: 12, b: 24 };
+      const laneH = (H - pad.t - pad.b) / signals.length;
+      const samples = w.samples;
+      const t0 = samples[0].t;
+      const t1 = samples[samples.length - 1].t || 1;
+      const span = Math.max(t1 - t0, 1);
+      const win = Math.min(24, samples.length);
+      const start = Math.max(0, Math.min(idx, samples.length - win));
+      const windowed = samples.slice(start, start + win);
+
+      let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+      svg += `<defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1a2535" stroke-width="0.5"/></pattern></defs>`;
+      svg += `<rect width="${W}" height="${H}" fill="url(#grid)" opacity="0.4"/>`;
+
+      signals.forEach((sig, li) => {
+        const y = pad.t + li * laneH + laneH / 2;
+        svg += `<text x="8" y="${y + 4}" fill="#5a6b7d" font-family="IBM Plex Sans" font-size="9">${labels[li]}</text>`;
+        svg += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="#1a2535" stroke-width="1"/>`;
+        let prevX = null;
+        let prevVal = null;
+        windowed.forEach((s, i) => {
+          const x = pad.l + ((s.t - windowed[0].t) / Math.max(windowed[windowed.length - 1].t - windowed[0].t, 1)) * (W - pad.l - pad.r);
+          const val = s[sig] || 0;
+          const high = val > 0;
+          const color = high ? (sig.includes("correction") ? "#3dff9a" : "#3dd6f5") : "#1e4a5c";
+          const h = laneH * 0.35;
+          svg += `<rect x="${x - 3}" y="${y - h / 2}" width="6" height="${h}" fill="${color}" opacity="${high ? 0.9 : 0.3}"/>`;
+          if (prevX != null && prevVal !== val) {
+            svg += `<line x1="${prevX}" y1="${y}" x2="${x}" y2="${y}" stroke="${color}" stroke-width="2"/>`;
+          }
+          prevX = x;
+          prevVal = val;
+        });
+      });
+
+      if (w.latency_cycles != null) {
+        svg += `<text x="${pad.l}" y="${H - 6}" fill="#3dff9a" font-family="IBM Plex Mono" font-size="10">syndrome&rarr;correction latency: ${w.latency_cycles} cycles</text>`;
+      }
+      svg += "</svg>";
+      body.innerHTML = svg;
+    }
+
+    function startWaveformLoop() {
+      if (!DATA.waveform?.samples?.length) return;
+      if (waveTimer) clearInterval(waveTimer);
+      waveIdx = 0;
+      drawWaveformFrame(0);
+      waveTimer = setInterval(() => {
+        waveIdx = (waveIdx + 1) % Math.max(1, DATA.waveform.samples.length - 20);
+        drawWaveformFrame(waveIdx);
+      }, 180);
+    }
+
+    /* ── Panel B: Climb ── */
+    function drawClimb(animate = false) {
+      const climb = DATA.climb;
+      const body = $("#body-b");
+      if (!climb?.history?.length) { showAwaiting(body); return; }
+
+      const hist = climb.history.map((h) => ({ step: h.step, reward: h.reward }));
+      const W = body.clientWidth || 600;
+      const H = body.clientHeight || 200;
+      const pad = { l: 44, r: 16, t: 20, b: 32 };
+      const rewards = hist.map((h) => h.reward);
+      const minR = Math.min(...rewards) * 0.98;
+      const maxR = Math.max(...rewards) * 1.02;
+      const range = Math.max(maxR - minR, 0.01);
+      const xScale = (step) => pad.l + (step / Math.max(hist[hist.length - 1].step, 1)) * (W - pad.l - pad.r);
+      const yScale = (r) => pad.t + (1 - (r - minR) / range) * (H - pad.t - pad.b);
+
+      function render(count) {
+        const slice = hist.slice(0, count);
+        let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+        for (let g = 0; g <= 4; g++) {
+          const y = pad.t + (g / 4) * (H - pad.t - pad.b);
+          const rv = maxR - (g / 4) * range;
+          svg += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="#1a2535" stroke-width="0.5"/>`;
+          svg += `<text x="4" y="${y + 3}" fill="#5a6b7d" font-family="IBM Plex Mono" font-size="8">${mono(rv)}</text>`;
+        }
+        if (slice.length > 1) {
+          const pts = slice.map((h) => `${xScale(h.step)},${yScale(h.reward)}`).join(" ");
+          svg += `<polyline points="${pts}" fill="none" stroke="#3dd6f5" stroke-width="2"/>`;
+        }
+        const last = slice[slice.length - 1];
+        if (last) {
+          svg += `<circle cx="${xScale(last.step)}" cy="${yScale(last.reward)}" r="4" fill="#3dff9a"/>`;
+          svg += `<text x="${pad.l}" y="${H - 8}" fill="#3dd6f5" font-family="IBM Plex Mono" font-size="10">reward ${mono(last.reward)} @ step ${last.step}</text>`;
+        }
+        svg += `<text x="${W / 2}" y="14" text-anchor="middle" fill="#5a6b7d" font-size="9">improving from verified attempts</text>`;
+        svg += "</svg>";
+        body.innerHTML = svg;
+      }
+
+      if (!animate) { render(hist.length); return Promise.resolve(); }
+      return new Promise((resolve) => {
+        let i = 1;
+        const tick = () => {
+          render(i);
+          if (i < hist.length) { i++; requestAnimationFrame(() => setTimeout(tick, 120)); }
+          else resolve();
+        };
+        tick();
+      });
+    }
+
+    /* ── Panel C: Memory A/B ── */
+    function updateMemoryHeadline() {
+      const m = DATA.memory;
+      const el = $("#memory-headline");
+      if (!m || !el) return;
+      if (m.slope_ratio != null && m.without_memory?.slope != null) {
+        el.textContent = `~${mono(m.slope_ratio, 1)}× slope with memory (${mono(m.with_memory.slope, 4)} vs ${mono(m.without_memory.slope, 4)})`;
+      } else if (m.with_memory?.end_reward != null) {
+        el.textContent = `memory wins: ${mono(m.with_memory.end_reward)} vs ${mono(m.without_memory.end_reward)}`;
+      }
+    }
+
+    function drawMemory(animate = false) {
+      const m = DATA.memory;
+      const body = $("#body-c");
+      const headline = $("#memory-headline");
+      body.querySelector("svg")?.remove();
+      if (!m?.without_memory?.history?.length || !m?.with_memory?.history?.length) {
+        showAwaiting(body);
+        if (headline) headline.classList.remove("visible");
+        return Promise.resolve();
+      }
+
+      const noH = m.without_memory.history;
+      const memH = m.with_memory.history;
+      const W = body.clientWidth || 600;
+      const H = body.clientHeight || 200;
+      const pad = { l: 44, r: 16, t: 28, b: 32 };
+      const allR = [...noH, ...memH].map((h) => h.reward);
+      const minR = Math.min(...allR) * 0.98;
+      const maxR = Math.max(...allR) * 1.02;
+      const range = Math.max(maxR - minR, 0.01);
+      const maxStep = Math.max(noH[noH.length - 1].step, memH[memH.length - 1].step, 1);
+      const xScale = (step) => pad.l + (step / maxStep) * (W - pad.l - pad.r);
+      const yScale = (r) => pad.t + (1 - (r - minR) / range) * (H - pad.t - pad.b);
+
+      function render(nNo, nMem) {
+        let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+        for (let g = 0; g <= 4; g++) {
+          const y = pad.t + (g / 4) * (H - pad.t - pad.b);
+          svg += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="#1a2535" stroke-width="0.5"/>`;
+        }
+        const drawLine = (hist, n, color) => {
+          const slice = hist.slice(0, n);
+          if (slice.length > 1) {
+            const pts = slice.map((h) => `${xScale(h.step)},${yScale(h.reward)}`).join(" ");
+            svg += `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" opacity="0.9"/>`;
+          }
+          const last = slice[slice.length - 1];
+          if (last) svg += `<circle cx="${xScale(last.step)}" cy="${yScale(last.reward)}" r="3" fill="${color}"/>`;
+        };
+        drawLine(noH, nNo, "#5a6b7d");
+        drawLine(memH, nMem, "#3dff9a");
+        svg += `<text x="${pad.l}" y="16" fill="#5a6b7d" font-family="IBM Plex Mono" font-size="9">without memory</text>`;
+        svg += `<text x="${pad.l + 120}" y="16" fill="#3dff9a" font-family="IBM Plex Mono" font-size="9">with memory</text>`;
+        svg += "</svg>";
+        const old = body.querySelector("svg");
+        if (old) old.remove();
+        body.insertAdjacentHTML("afterbegin", svg);
+        if (headline) headline.classList.add("visible");
+        updateMemoryHeadline();
+      }
+
+      if (!animate) { render(noH.length, memH.length); return Promise.resolve(); }
+      return new Promise((resolve) => {
+        let i = 1;
+        const maxLen = Math.max(noH.length, memH.length);
+        const tick = () => {
+          render(Math.min(i, noH.length), Math.min(i, memH.length));
+          if (i < maxLen) { i++; setTimeout(tick, 120); }
+          else resolve();
+        };
+        tick();
+      });
+    }
+
+    /* ── Panel D: Pareto ── */
+    function drawPareto(animate = false) {
+      const p = DATA.pareto;
+      const body = $("#body-d");
+      if (!p?.points?.length) { showAwaiting(body); return Promise.resolve(); }
+
+      const pts = p.points;
+      const budget = p.budget || {};
+      const W = body.clientWidth || 600;
+      const H = body.clientHeight || 200;
+      const pad = { l: 48, r: 16, t: 24, b: 36 };
+      const lers = pts.map((x) => x.ler);
+      const lats = pts.map((x) => x.latency_cycles);
+      const minLer = Math.min(...lers) * 0.9;
+      const maxLer = Math.max(...lers, 0.022) * 1.1;
+      const maxLat = Math.max(...lats, budget.max_latency_cycles || 64) * 1.15;
+      const lerRange = Math.max(maxLer - minLer, 0.001);
+      const xScale = (lat) => pad.l + (lat / maxLat) * (W - pad.l - pad.r);
+      const yScale = (ler) => pad.t + ((ler - minLer) / lerRange) * (H - pad.t - pad.b);
+
+      const bLat = budget.max_latency_cycles || 64;
+      const bLer = 0.022;
+      const bx0 = pad.l;
+      const bx1 = xScale(bLat);
+      const by0 = yScale(minLer);
+      const by1 = yScale(bLer);
+
+      function render(visible) {
+        let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+        svg += `<text x="${W / 2}" y="12" text-anchor="middle" fill="#5a6b7d" font-size="9">logical error rate (lower = better)</text>`;
+        svg += `<text x="${W / 2}" y="${H - 6}" text-anchor="middle" fill="#5a6b7d" font-family="IBM Plex Mono" font-size="8">latency (cycles)</text>`;
+        if (visible >= 1) {
+          svg += `<rect x="${bx0}" y="${by0}" width="${bx1 - bx0}" height="${by1 - by0}" fill="rgba(61,255,154,0.06)" stroke="#3dff9a" stroke-width="1" stroke-dasharray="4 2" opacity="0.8"/>`;
+          svg += `<text x="${bx1 - 4}" y="${by0 + 10}" text-anchor="end" fill="#3dff9a" font-size="8">cryo budget</text>`;
+        }
+        pts.slice(0, visible).forEach((pt) => {
+          const x = xScale(pt.latency_cycles);
+          const y = yScale(pt.ler);
+          const off = !pt.fits_budget || pt.label === "mwpm";
+          const color = pt.is_winner ? "#3dff9a" : off ? "#ff4d6a" : "#3dd6f5";
+          const r = pt.is_winner ? 7 : 5;
+          const glow = pt.is_winner ? ` filter="url(#glow)"` : "";
+          svg += `<circle cx="${x}" cy="${y}" r="${r}" fill="${color}" opacity="0.9"${glow}/>`;
+          svg += `<text x="${x + 8}" y="${y + 3}" fill="${color}" font-family="IBM Plex Mono" font-size="8">${pt.label}</text>`;
+          if (pt.is_winner && p.yosys_area_um2 != null) {
+            svg += `<text x="${x}" y="${y - 12}" text-anchor="middle" fill="#3dff9a" font-family="IBM Plex Mono" font-size="9">Yosys ${mono(p.yosys_area_um2, 1)} &micro;m&sup2;</text>`;
+          }
+          if (pt.label === "mwpm" && off) {
+            svg += `<text x="${x}" y="${y + 14}" text-anchor="middle" fill="#ff4d6a" font-size="7">off-budget</text>`;
+          }
+        });
+        svg += `<defs><filter id="glow"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+        svg += "</svg>";
+        body.innerHTML = svg;
+      }
+
+      if (!animate) { render(pts.length); return Promise.resolve(); }
+      return new Promise((resolve) => {
+        let i = 0;
+        const tick = () => {
+          render(i + 1);
+          if (i < pts.length - 1) { i++; setTimeout(tick, 150); }
+          else resolve();
+        };
+        tick();
+      });
+    }
+
+    /* ── Gate honesty toast ── */
+    async function showGateBeat() {
+      const gate = DATA.gate;
+      const toast = $("#gate-toast");
+      if (!gate || !toast) return;
+      const seq = [
+        { key: "invalid", cls: "bad" },
+        { key: "valid", cls: "good" },
+      ];
+      for (const item of seq) {
+        const g = gate[item.key];
+        if (!g) continue;
+        $("#gate-label").textContent = g.label;
+        const el = $("#gate-reward");
+        el.textContent = `reward ${mono(g.reward)}`;
+        el.className = `reward ${item.cls}`;
+        toast.classList.add("show");
+        await sleep(900);
+      }
+      toast.classList.remove("show");
+    }
+
+    /* ── Play story ── */
+    let playing = false;
+    async function playStory() {
+      if (playing) return;
+      playing = true;
+      $("#play-story").disabled = true;
+      highlightPanel(null);
+      await showGateBeat();
+      highlightPanel("climb");
+      await drawClimb(true);
+      await sleep(400);
+      highlightPanel("memory");
+      await drawMemory(true);
+      await sleep(400);
+      highlightPanel("pareto");
+      await drawPareto(true);
+      await sleep(600);
+      highlightPanel(null);
+      document.querySelectorAll(".panel").forEach((p) => p.classList.add("active"));
+      playing = false;
+      $("#play-story").disabled = false;
+    }
+
+    function init() {
+      setSource("a", "waveform");
+      setSource("b", "climb");
+      setSource("c", "memory");
+      setSource("d", "pareto");
+      const srcs = DATA.sources ? Object.values(DATA.sources).join(" · ") : "";
+      $("#footer-sources").textContent = `live from: ${srcs}`;
+      startWaveformLoop();
+      drawClimb(false);
+      drawMemory(false);
+      drawPareto(false);
+
+      $("#play-story").addEventListener("click", playStory);
+      document.querySelectorAll("[data-replay]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const kind = btn.dataset.replay;
+          highlightPanel(kind);
+          if (kind === "waveform") startWaveformLoop();
+          else if (kind === "climb") drawClimb(true);
+          else if (kind === "memory") drawMemory(true);
+          else if (kind === "pareto") drawPareto(true);
+        });
+      });
+      window.addEventListener("resize", () => {
+        drawWaveformFrame(waveIdx);
+        drawClimb(false);
+        drawMemory(false);
+        drawPareto(false);
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
