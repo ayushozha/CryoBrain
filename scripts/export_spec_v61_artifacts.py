@@ -61,6 +61,16 @@ def _first_event(events: list[dict], agent: str, action: str | None = None) -> d
     return None
 
 
+def _last_event(events: list[dict], agent: str, action: str | None = None) -> dict | None:
+    for event in reversed(events):
+        if event.get("agent") != agent:
+            continue
+        if action is not None and event.get("action") != action:
+            continue
+        return event
+    return None
+
+
 def export_design_runs(*, log_path: Path = DEFAULT_LOG, limit: int = 3) -> list[str]:
     """Materialize design_runs/<id>/ bundles from the swarm event log."""
     grouped = _events_by_design(log_path)
@@ -104,13 +114,14 @@ def export_design_runs(*, log_path: Path = DEFAULT_LOG, limit: int = 3) -> list[
                 generate_rtl(DesignConfig.from_dict(design_payload), workdir)
                 shutil.copy2(workdir / "cryo_brain_decoder.sv", out_dir / "generated_decoder.sv")
 
-        for agent, action, filename in (
-            ("Measurement", "measure", "stim_ler_result.json"),
-            ("Verifier", "verify", "verilator_result.json"),
-            ("Scorer", "score", "score.json"),
-            ("Memory", "record_variant", "memory_update.json"),
+        for agent, action, filename, pick_last in (
+            ("Measurement", "measure", "stim_ler_result.json", False),
+            ("Verifier", "verify", "verilator_result.json", False),
+            ("Scorer", "score", "score.json", True),
+            ("Memory", "record_variant", "memory_update.json", True),
         ):
-            hit = _first_event(events, agent, action)
+            picker = _last_event if pick_last else _first_event
+            hit = picker(events, agent, action)
             if hit:
                 (out_dir / filename).write_text(
                     json.dumps(hit.get("payload", {}), indent=2) + "\n",
@@ -120,6 +131,29 @@ def export_design_runs(*, log_path: Path = DEFAULT_LOG, limit: int = 3) -> list[
                     src = ROOT / str(hit["artifact_ref"])
                     if src.is_file():
                         shutil.copy2(src, out_dir / Path(hit["artifact_ref"]).name)
+
+        score_artifact = out_dir / f"{design_id}.json"
+        if score_artifact.is_file():
+            full_score = json.loads(score_artifact.read_text(encoding="utf-8"))
+            synth = full_score.get("synth") or {
+                "area_um2": full_score.get("area_um2"),
+                "latency_cycles": full_score.get("latency_cycles"),
+                "power_mw_est": full_score.get("power_mw"),
+            }
+            if any(v is not None for v in synth.values()):
+                (out_dir / "yosys_metrics.json").write_text(
+                    json.dumps(synth, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+            verify = {
+                "layers_passed": full_score.get("layers_passed", []),
+                "valid": full_score.get("valid", False),
+                "design_id": design_id,
+            }
+            (out_dir / "verification_report.json").write_text(
+                json.dumps(verify, indent=2) + "\n",
+                encoding="utf-8",
+            )
 
         pipeline = [e for e in events if e.get("agent") in PIPELINE_AGENTS]
         (out_dir / "plan.json").write_text(

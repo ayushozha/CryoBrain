@@ -1,0 +1,26 @@
+{
+  "backend": "verilator+fifo-throughput",
+  "reward_source": "measured_fifo_throughput",
+  "target": "stream_arb_fifo",
+  "steps": 5,
+  "history": [
+    {
+      "step": 0,
+      "throughput": 0.09375,
+      "suppression": 0.046875,
+      "rtl_hash": "05e937c4ac7b4bf318111d51c9c92fef8bc7169d2934ec513a5eeb9b68053640"
+    },
+    {
+      "step": 1,
+      "throughput": 0.3125,
+      "suppression": 0.265625,
+      "rtl_hash": "fbf0e393adf4b88f0649ef44ab5e2a210d69f45b4a963dfb8f7bcaac8c74d8cd"
+    },
+    {
+      "step": 2,
+      "throughput": 0.4375,
+      "suppression": 0.390625,
+      "rtl_hash": "0907eae4f7d0d8807bc59b13cef5425552e0d9c65a92cf3630d115d733ea0e71"
+    }
+  ]
+}

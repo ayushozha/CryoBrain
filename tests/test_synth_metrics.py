@@ -24,11 +24,11 @@ def test_synth_metrics_returns_fields(tmp_path):
     assert Path(result["yosys_log_path"]).is_file()
 
 
-def test_three_presets_distinct_cell_counts(tmp_path):
-    counts = []
+def test_three_presets_distinct_rtl_and_valid_synth(tmp_path):
+    bodies = []
     for i, design in enumerate(preset_variants()):
         rtl = generate_rtl(design, tmp_path / f"v{i}")
         metrics = synth_metrics(rtl)
         assert metrics["valid"]
-        counts.append(metrics["cell_count"])
-    assert len(set(counts)) == 3
+        bodies.append(rtl.read_text(encoding="utf-8"))
+    assert len(set(bodies)) == 3

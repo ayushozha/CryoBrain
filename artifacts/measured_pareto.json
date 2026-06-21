@@ -5,16 +5,79 @@
     "ler",
     "area_um2"
   ],
-  "count": 1,
-  "frontier_count": 1,
+  "count": 8,
+  "frontier_count": 8,
   "points": [
     {
       "label": "cryo_brain_decoder@239eb2ca",
       "ler": 0.0,
       "area_um2": 6.0,
       "latency_cycles": 8,
-      "rtl_path": "/tmp/cryobrain-rollout-sm5krii4/rtl/cryo_brain_decoder.sv",
+      "rtl_path": "/tmp/cryobrain-rollout-js99j2xs/rtl/cryo_brain_decoder.sv",
       "rtl_hash": "239eb2ca81561e4df273f2c0fba404a23e02996440087465b0e807f8a735ae2d",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@90f8381a",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-kolb6osc/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "90f8381a7b91ad697299be3b80d7bec7acd8d3871d1de9ec167aac8124a952fe",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@802a9052",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 1,
+      "rtl_path": "/tmp/cryobrain-rollout-p3mg4dyh/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "802a905218341ffff8cddcfb8c2bf9dc9c2e0df23c941e9a5d6b67172acf4dcc",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@4a1079be",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-p3ntbyt_/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "4a1079be89e6ad6fd2af2f57b2df7b27a73cc5794dd0734d65445a0cd648364f",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@b3515887",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-9ppqmzr0/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "b3515887550c269a69cb91debb03bb7463539595a1dd4536a1cad016c689bbac",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@6e48dc18",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-9o_feupw/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "6e48dc18601033d75c55c5e201f79c53b4b8f45b0bc60236bda2ce931827285f",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@e7e35c97",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-slpuzdv1/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "e7e35c970babbd0288c9fadd96c4357d9ef859132ba5617b7fc106ac33dbb0c2",
+      "on_frontier": true
+    },
+    {
+      "label": "cryo_brain_decoder@663e0151",
+      "ler": 0.0,
+      "area_um2": 6.0,
+      "latency_cycles": 2,
+      "rtl_path": "/tmp/cryobrain-rollout-cncknpl9/rtl/cryo_brain_decoder.sv",
+      "rtl_hash": "663e0151ae1cfa4100e3f009a98ce298f14bf9041b0d413cc729a811b5357a08",
       "on_frontier": true
     }
   ]

@@ -1,13 +1,13 @@
 {
   "backend": "verilator+stim+yosys",
   "reward_source": "score_measured",
-  "steps": 1,
+  "steps": 5,
   "history": [
     {
       "step": 0,
       "candidate_ler": 0.0,
       "suppression": 1.0,
-      "rtl_hash": "239eb2ca81561e4df273f2c0fba404a23e02996440087465b0e807f8a735ae2d"
+      "rtl_hash": "90f8381a7b91ad697299be3b80d7bec7acd8d3871d1de9ec167aac8124a952fe"
     }
   ]
 }

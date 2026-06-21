@@ -28,8 +28,14 @@ bash scripts/run_mp2_wsl.sh
 echo "=== C5 unit wiring (boundary monkeypatched) ==="
 uv run pytest tests/test_local_trainer_measured.py -q
 
-echo "=== C5 REAL measured climb (${STEPS} steps, deterministic proposer) ==="
-uv run python -m cryobrain.rl.local_trainer --steps "${STEPS}" --no-fireworks --memory-ab
+PROPOSER_ARGS=(--no-fireworks)
+if [[ -n "${FIREWORKS_API_KEY:-}" ]]; then
+  echo "=== C5 sponsor: Fireworks Architect proposer enabled ==="
+  PROPOSER_ARGS=(--fireworks)
+else
+  echo "=== C5 measured climb (${STEPS} steps, deterministic proposer; set FIREWORKS_API_KEY for sponsor path) ==="
+fi
+uv run python -m cryobrain.rl.local_trainer --steps "${STEPS}" "${PROPOSER_ARGS[@]}" --memory-ab
 
 echo "=== C5 measured Pareto ==="
 uv run python -m cryobrain.benchmark.pareto --emit "${REPO}/artifacts/measured_pareto.json"
