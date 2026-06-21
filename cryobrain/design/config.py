@@ -45,7 +45,7 @@ def l2_safe_variants() -> list[DesignConfig]:
 
 
 def preset_variants() -> list[DesignConfig]:
-    """Three distinct L2-safe configs for MP1 / frontier sweep."""
+    """Distinct L2-safe configs for MP1 / frontier sweep."""
     return l2_safe_variants()
 
 

@@ -11,12 +11,27 @@ ROOT = Path(__file__).resolve().parents[1]
 
 PIPELINE = (
     "Research",
+    "Planner",
     "Architect",
     "RTL",
     "Measurement",
     "Verifier",
     "Scorer",
     "Memory",
+)
+
+MANDATORY_RUN_FILES = (
+    "research_context.json",
+    "plan.json",
+    "design_config.json",
+    "generated_decoder.sv",
+    "verilator_result.json",
+    "yosys_metrics.json",
+    "stim_ler_result.json",
+    "verification_report.json",
+    "score.json",
+    "memory_update.json",
+    "run_summary.md",
 )
 
 
@@ -33,6 +48,23 @@ def _read_events(path: Path) -> list[dict]:
         if line:
             events.append(json.loads(line))
     return events
+
+
+def _consistent_measurement_score(run_dir: Path) -> bool:
+    measurement = _load_json(run_dir / "stim_ler_result.json")
+    score = _load_json(run_dir / "score.json")
+    score_measurement = score.get("measurement") if isinstance(score.get("measurement"), dict) else {}
+    if "candidate_ler" in measurement and score.get("ler") is not None:
+        if float(measurement["candidate_ler"]) != float(score["ler"]):
+            return False
+    if "suppression" in measurement and score.get("suppression") is not None:
+        if float(measurement["suppression"]) != float(score["suppression"]):
+            return False
+    for key in ("candidate_ler", "suppression"):
+        if key in measurement and key in score_measurement:
+            if float(measurement[key]) != float(score_measurement[key]):
+                return False
+    return True
 
 
 def check_c0() -> tuple[bool, str]:
@@ -55,10 +87,21 @@ def check_c1() -> tuple[bool, str]:
 
 
 def check_c2() -> tuple[bool, str]:
-    runs = list((ROOT / "artifacts" / "design_runs").glob("d*/score.json"))
-    if len(runs) < 3:
-        return False, f"need 3+ design cycles, have {len(runs)}"
-    return True, f"{len(runs)} design_runs with score.json"
+    run_dirs = sorted((ROOT / "artifacts" / "design_runs").glob("d*"))
+    run_dirs = [path for path in run_dirs if path.is_dir()]
+    if len(run_dirs) < 5:
+        return False, f"need 5+ design cycles, have {len(run_dirs)}"
+    incomplete: list[str] = []
+    for run_dir in run_dirs[:5]:
+        missing = [name for name in MANDATORY_RUN_FILES if not (run_dir / name).is_file()]
+        if missing:
+            incomplete.append(f"{run_dir.name}: missing {missing}")
+            continue
+        if not _consistent_measurement_score(run_dir):
+            incomplete.append(f"{run_dir.name}: score/measurement mismatch")
+    if incomplete:
+        return False, "; ".join(incomplete)
+    return True, f"{len(run_dirs)} design_runs with mandatory artifacts"
 
 
 def check_c3() -> tuple[bool, str]:

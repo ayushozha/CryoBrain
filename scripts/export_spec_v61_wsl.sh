@@ -11,5 +11,5 @@ cd "${REPO}"
 uv sync
 export PATH="${UV_PROJECT_ENVIRONMENT}/bin:${PATH}"
 
-uv run python scripts/export_spec_v61_artifacts.py --design-runs 3
+uv run python scripts/export_spec_v61_artifacts.py --design-runs 5
 echo "=== SPEC-v6.1 artifact export PASS ==="

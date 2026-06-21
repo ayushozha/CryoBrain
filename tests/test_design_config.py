@@ -15,9 +15,9 @@ def test_default_design_valid():
 
 def test_preset_variants_distinct():
     variants = preset_variants()
-    assert len(variants) == 3
+    assert len(variants) == 8
     keys = [tuple(sorted(v.to_dict().items())) for v in variants]
-    assert len(set(keys)) == 3
+    assert len(set(keys)) == len(variants)
 
 
 def test_invalid_bitwidth_rejected():

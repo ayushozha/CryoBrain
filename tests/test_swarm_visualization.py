@@ -81,6 +81,12 @@ def test_load_event_log_skips_blank_lines(tmp_path: Path):
 
 def test_build_swarm_timeline_counts_results_vs_in_progress(tmp_path: Path):
     log = tmp_path / "swarm" / "event_log.jsonl"
+    artifact = tmp_path / "artifacts" / "measured" / "d1.json"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text(
+        json.dumps({"design_id": "d1", "measurement": {"candidate_ler": 0.017}}),
+        encoding="utf-8",
+    )
     _write_log(
         log,
         [
@@ -89,8 +95,9 @@ def test_build_swarm_timeline_counts_results_vs_in_progress(tmp_path: Path):
                 "agent": "Measurement",
                 "action": "measure",
                 "design_id": "d1",
+                "payload": {"candidate_ler": 0.017},
                 "measured": True,
-                "artifact_ref": "artifacts/measured/d1.json",
+                "artifact_ref": str(artifact),
             },
             {"agent": "Architect", "action": "propose", "design_id": "d2"},
         ],
@@ -99,6 +106,33 @@ def test_build_swarm_timeline_counts_results_vs_in_progress(tmp_path: Path):
     assert timeline is not None
     assert timeline["summary"] == {"total": 3, "results": 1, "in_progress": 2}
     assert timeline["events"][1]["status"] == STATUS_RESULT
+    assert timeline["events"][0]["status"] == STATUS_IN_PROGRESS
+
+
+def test_build_swarm_timeline_rejects_mismatched_artifact_payload(tmp_path: Path):
+    log = tmp_path / "swarm" / "event_log.jsonl"
+    artifact = tmp_path / "artifacts" / "measured" / "d1.json"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text(
+        json.dumps({"design_id": "d1", "measurement": {"candidate_ler": 0.5}}),
+        encoding="utf-8",
+    )
+    _write_log(
+        log,
+        [
+            {
+                "agent": "Measurement",
+                "action": "measure",
+                "design_id": "d1",
+                "payload": {"candidate_ler": 0.017},
+                "measured": True,
+                "artifact_ref": str(artifact),
+            },
+        ],
+    )
+    timeline = build_swarm_timeline(log)
+    assert timeline is not None
+    assert timeline["summary"] == {"total": 1, "results": 0, "in_progress": 1}
     assert timeline["events"][0]["status"] == STATUS_IN_PROGRESS
 
 

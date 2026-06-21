@@ -46,7 +46,7 @@ def run_planner_training(
     scenario = _load_scenario(task_root)
     rng = random.Random(seed)
     store = store if store is not None else MemoryStore()
-    planner = Planner(seed=seed, bus=bus if bus is not None else EventBus(log_path=None))
+    planner = Planner(seed=seed, bus=bus if bus is not None else EventBus())
 
     best_suppression = float("-inf")
     history: list[dict[str, Any]] = []

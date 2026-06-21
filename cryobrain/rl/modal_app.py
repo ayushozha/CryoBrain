@@ -30,6 +30,7 @@ PIP_PACKAGES = (
     "stim>=1.14",
     "pymatching>=2.0",
     "numpy>=1.26",
+    "pydantic>=2.0",
     "python-dotenv>=1.0",
 )
 
@@ -37,9 +38,30 @@ PIP_PACKAGES = (
 # measurement code) + the decoder task fixtures (scenario.json, dv/, synth/,
 # rtl/ — what ``measure_candidate_ler`` / ``score_measured`` stage and read).
 LOCAL_PACKAGE_DIR = ROOT / "cryobrain"
-LOCAL_TASK_DIR = ROOT / "tasks" / "cryo_brain_decoder"
+LOCAL_TASKS_DIR = ROOT / "tasks"
 REMOTE_PACKAGE_DIR = "/root/cryobrain"
 REMOTE_TASK_DIR = "/root/tasks/cryo_brain_decoder"
+PROJECT_ROOT_FILES = (
+    "env.py",
+    "tasks.py",
+    "task_catalog.py",
+    "grader.py",
+    "scenario_helpers.py",
+)
+
+
+def _modal_source_ignore(path: Path) -> bool:
+    return "donotaccess" in path.parts
+
+
+def add_project_sources(image):
+    image = image.add_local_dir(LOCAL_PACKAGE_DIR, remote_path=REMOTE_PACKAGE_DIR)
+    image = image.add_local_dir(LOCAL_TASKS_DIR, remote_path="/root/tasks", ignore=_modal_source_ignore)
+    for name in PROJECT_ROOT_FILES:
+        path = ROOT / name
+        if path.is_file():
+            image = image.add_local_file(path, remote_path=f"/root/{name}")
+    return image
 
 
 def build_image():
@@ -51,13 +73,12 @@ def build_image():
     """
     import modal
 
-    return (
+    image = (
         modal.Image.debian_slim(python_version="3.12")
         .apt_install(*APT_PACKAGES)
         .pip_install(*PIP_PACKAGES)
-        .add_local_dir(LOCAL_PACKAGE_DIR, remote_path=REMOTE_PACKAGE_DIR)
-        .add_local_dir(LOCAL_TASK_DIR, remote_path=REMOTE_TASK_DIR)
     )
+    return add_project_sources(image)
 
 
 def build_app():

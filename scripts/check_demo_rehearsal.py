@@ -20,6 +20,27 @@ REQUIRED = [
 ]
 
 
+def _load_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _consistent_measurement_score(run_dir: Path) -> bool:
+    measurement = _load_json(run_dir / "stim_ler_result.json")
+    score = _load_json(run_dir / "score.json")
+    score_measurement = score.get("measurement") if isinstance(score.get("measurement"), dict) else {}
+    if "candidate_ler" in measurement and score.get("ler") is not None:
+        if float(measurement["candidate_ler"]) != float(score["ler"]):
+            return False
+    if "suppression" in measurement and score.get("suppression") is not None:
+        if float(measurement["suppression"]) != float(score["suppression"]):
+            return False
+    for key in ("candidate_ler", "suppression"):
+        if key in measurement and key in score_measurement:
+            if float(measurement[key]) != float(score_measurement[key]):
+                return False
+    return True
+
+
 def main() -> int:
     missing = [str(p.relative_to(ROOT)) for p in REQUIRED if not p.is_file()]
     if missing:
@@ -28,10 +49,10 @@ def main() -> int:
             print(f"  - {path}")
         return 1
 
-    climb = json.loads((ROOT / "artifacts" / "measured_climb.json").read_text(encoding="utf-8"))
-    fifo = json.loads((ROOT / "artifacts" / "measured_fifo_climb.json").read_text(encoding="utf-8"))
-    pareto = json.loads((ROOT / "artifacts" / "measured_pareto.json").read_text(encoding="utf-8"))
-    demo = json.loads((ROOT / "artifacts" / "demo_bundle.json").read_text(encoding="utf-8"))
+    climb = _load_json(ROOT / "artifacts" / "measured_climb.json")
+    fifo = _load_json(ROOT / "artifacts" / "measured_fifo_climb.json")
+    pareto = _load_json(ROOT / "artifacts" / "measured_pareto.json")
+    demo = _load_json(ROOT / "artifacts" / "demo_bundle.json")
 
     assert climb.get("reward_source") == "score_measured"
     assert fifo.get("reward_source") == "measured_fifo_throughput"
@@ -43,8 +64,10 @@ def main() -> int:
         "demo must show at least one improving measured track"
     )
 
-    design_runs = list((ROOT / "artifacts" / "design_runs").glob("d*/score.json"))
-    assert len(design_runs) >= 3, "C2 needs 3+ design cycles"
+    design_runs = sorted(path.parent for path in (ROOT / "artifacts" / "design_runs").glob("d*/score.json"))
+    assert len(design_runs) >= 5, "submission needs 5+ design cycles"
+    mismatched = [run.name for run in design_runs[:5] if not _consistent_measurement_score(run)]
+    assert not mismatched, f"design run score/measurement mismatch: {mismatched}"
 
     fifo_hist = fifo.get("history", [])
     fifo_trend = fifo_hist[-1]["throughput"] - fifo_hist[0]["throughput"] if len(fifo_hist) >= 2 else 0.0

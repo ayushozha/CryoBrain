@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -41,22 +42,14 @@ def _write_json_artifact(path: Path, payload: dict[str, Any]) -> str:
 
 
 def _measurement_artifact_ref(design_id: str, measurement: dict[str, Any]) -> str:
-    ref_path = MEASURED_DIR / f"{design_id}.json"
+    ref_path = MEASURED_DIR / f"{design_id}-{time.time_ns()}.json"
     return _write_json_artifact(ref_path, {"design_id": design_id, "measurement": measurement})
 
 
 def _score_artifact_ref(design_id: str, score: dict[str, Any]) -> str:
-    ref_path = SCORES_DIR / f"{design_id}.json"
-    slim = {
-        "design_id": design_id,
-        "reward": score.get("reward"),
-        "valid": score.get("valid"),
-        "ler": score.get("ler"),
-        "suppression": score.get("suppression"),
-        "layers_passed": score.get("layers_passed"),
-        "source": score.get("source"),
-    }
-    return _write_json_artifact(ref_path, slim)
+    ref_path = SCORES_DIR / f"{design_id}-{time.time_ns()}.json"
+    payload = {"design_id": design_id, **score}
+    return _write_json_artifact(ref_path, payload)
 
 
 def research_step(

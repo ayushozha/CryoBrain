@@ -141,6 +141,12 @@ def test_build_demo_includes_swarm_timeline_when_log_present(tmp_path: Path):
     _write_json(artifacts / "measured_pareto.json", _measured_pareto_fixture())
     log = artifacts / "swarm" / "event_log.jsonl"
     log.parent.mkdir(parents=True, exist_ok=True)
+    measured_artifact = artifacts / "measured" / "d1.json"
+    measured_artifact.parent.mkdir(parents=True, exist_ok=True)
+    measured_artifact.write_text(
+        json.dumps({"design_id": "d1", "measurement": {"candidate_ler": 0.017}}),
+        encoding="utf-8",
+    )
     log.write_text(
         "\n".join(
             [
@@ -150,8 +156,9 @@ def test_build_demo_includes_swarm_timeline_when_log_present(tmp_path: Path):
                         "agent": "Measurement",
                         "action": "measure",
                         "design_id": "d1",
+                        "payload": {"candidate_ler": 0.017},
                         "measured": True,
-                        "artifact_ref": "artifacts/measured/d1.json",
+                        "artifact_ref": str(measured_artifact),
                     }
                 ),
             ]

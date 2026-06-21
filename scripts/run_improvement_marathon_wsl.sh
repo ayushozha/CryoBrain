@@ -15,7 +15,7 @@ fi
 
 cd "${REPO}"
 export UV_PROJECT_ENVIRONMENT="${REPO}/.venv-linux"
-uv sync
+uv sync --extra rl --extra sponsors
 export PATH="${UV_PROJECT_ENVIRONMENT}/bin:${PATH}"
 
 if [[ -f .env ]]; then
@@ -25,22 +25,42 @@ if [[ -f .env ]]; then
   set +a
 fi
 
+if [[ -z "${MODAL_TOKEN_ID:-}" || -z "${MODAL_TOKEN_SECRET:-}" ]]; then
+  MODAL_TOML="/mnt/c/Users/ayush/.modal.toml"
+  if [[ -f "${MODAL_TOML}" ]]; then
+    eval "$(python3 - "${MODAL_TOML}" <<'PY'
+import shlex
+import sys
+import tomllib
+from pathlib import Path
+
+data = tomllib.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+profiles = [(name, value) for name, value in data.items() if isinstance(value, dict)]
+active = [value for _, value in profiles if value.get("active")]
+profile = active[0] if active else (profiles[0][1] if profiles else {})
+token_id = str(profile.get("token_id", "")).strip()
+token_secret = str(profile.get("token_secret", "")).strip()
+if token_id and token_secret:
+    print(f"export MODAL_TOKEN_ID={shlex.quote(token_id)}")
+    print(f"export MODAL_TOKEN_SECRET={shlex.quote(token_secret)}")
+PY
+)"
+  fi
+fi
+
 CYCLES="${1:-6}"
 STEPS="${2:-10}"
-FIREWORKS_FLAG=()
-if [[ -n "${FIREWORKS_API_KEY:-}" ]]; then
-  FIREWORKS_FLAG=(--fireworks)
-  echo "=== Marathon: Fireworks proposer enabled ==="
-fi
+echo "=== Marathon: required sponsor connectivity ==="
+uv run --extra rl --extra sponsors python scripts/check_sponsors.py --require-core
 
 echo "=== Improvement marathon: ${CYCLES} cycles x ${STEPS} steps ==="
 echo "=== Log: artifacts/improvement_marathon.jsonl ==="
 
-uv run python scripts/run_improvement_marathon.py \
+uv run --extra rl --extra sponsors python scripts/run_improvement_marathon.py \
   --cycles "${CYCLES}" \
   --steps "${STEPS}" \
   --pause-secs 15 \
-  "${FIREWORKS_FLAG[@]}"
+  --require-sponsors
 
 echo "=== Marathon artifacts ==="
 ls -la artifacts/measured_climb.json artifacts/measured_fifo_climb.json artifacts/improvement_marathon.jsonl 2>/dev/null || true

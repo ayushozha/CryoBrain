@@ -32,4 +32,4 @@ def test_generate_rtl_writes_file(tmp_path):
 def test_preset_variants_emit_distinct_sv(tmp_path):
     paths = [generate_rtl(d, tmp_path / f"v{i}") for i, d in enumerate(preset_variants())]
     bodies = [p.read_text(encoding="utf-8") for p in paths]
-    assert len(set(bodies)) == 3
+    assert len(set(bodies)) == len(bodies)

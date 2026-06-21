@@ -20,7 +20,9 @@ ARTIFACTS = ROOT / "artifacts"
 sys.path.insert(0, str(ROOT))
 
 from cryobrain.memory.store import MemoryStore  # noqa: E402
-from cryobrain.rl import fifo_loop, local_trainer  # noqa: E402
+from cryobrain.rl import fifo_loop, local_trainer, planner_trainer  # noqa: E402
+from cryobrain.rl.modal_measure import make_modal_score_fn  # noqa: E402
+from scripts.check_sponsors import CORE_SPONSORS, build_report  # noqa: E402
 
 MARATHON_LOG = ARTIFACTS / "improvement_marathon.jsonl"
 DECODER_STORE = ARTIFACTS / "marathon_decoder_memory.jsonl"
@@ -56,29 +58,48 @@ def _summarize_climb(path: Path, *, metric: str = "suppression") -> dict:
 def _run_shell(cmd: list[str], *, label: str) -> int:
     print(f"\n=== {label} ===", flush=True)
     proc = subprocess.run(cmd, cwd=ROOT, check=False)
+    if proc.returncode:
+        raise subprocess.CalledProcessError(proc.returncode, cmd)
     return int(proc.returncode)
 
 
-def run_cycle(*, cycle: int, steps: int, seed: int, use_fireworks: bool) -> dict:
+def _require_core_sponsors() -> dict[str, object]:
+    report = build_report()
+    missing = [name for name in CORE_SPONSORS if not report.get(name)]
+    if missing:
+        raise RuntimeError(f"missing required sponsor platform(s): {', '.join(missing)}")
+    return report
+
+
+def run_cycle(
+    *,
+    cycle: int,
+    steps: int,
+    seed: int,
+    use_fireworks: bool,
+    use_modal_measure: bool,
+) -> dict:
     started = datetime.now(timezone.utc).isoformat()
     decoder_store = MemoryStore(DECODER_STORE)
     fifo_store = MemoryStore(FIFO_STORE)
 
-    proposer = (
-        local_trainer.fireworks_proposer if use_fireworks else local_trainer.deterministic_proposer
-    )
+    proposer = local_trainer.fireworks_proposer if use_fireworks else local_trainer.deterministic_proposer
+    score_fn = make_modal_score_fn(force_local=False) if use_modal_measure else local_trainer.score_measured
+    backend = "modal+stim+verilator+yosys" if use_modal_measure else "verilator+stim+yosys"
 
     print(f"\n=== cycle {cycle}: decoder climb ({steps} steps, persistent memory) ===", flush=True)
     decoder = local_trainer.run_measured_training(
         steps=steps,
         seed=seed,
         proposer=proposer,
+        score_fn=score_fn,
         store=decoder_store,
         climb_path=ARTIFACTS / "measured_climb.json",
+        backend=backend,
     )
 
     print(f"\n=== cycle {cycle}: memory A/B ({steps} steps) ===", flush=True)
-    local_trainer.run_memory_ab(steps=steps, seed=seed + 17)
+    local_trainer.run_memory_ab(steps=steps, seed=seed + 17, score_fn=score_fn)
 
     print(f"\n=== cycle {cycle}: FIFO climb ({steps} steps, persistent memory) ===", flush=True)
     fifo = fifo_loop.run_fifo_training(
@@ -88,9 +109,14 @@ def run_cycle(*, cycle: int, steps: int, seed: int, use_fireworks: bool) -> dict
         climb_path=ARTIFACTS / "measured_fifo_climb.json",
     )
 
-    planner_rc = _run_shell(
-        [sys.executable, "-m", "cryobrain.rl.planner_trainer", "--steps", str(steps), "--seed", str(seed + 47)],
-        label=f"cycle {cycle}: planner climb",
+    print(f"\n=== cycle {cycle}: planner climb ({steps} steps, sponsor measured) ===", flush=True)
+    planner_trainer.run_planner_training(
+        steps=steps,
+        seed=seed + 47,
+        score_fn=score_fn,
+        store=decoder_store,
+        climb_path=ARTIFACTS / "planner_climb.json",
+        backend=backend,
     )
 
     _run_shell(["bash", "scripts/run_frontier_sweep_wsl.sh"], label=f"cycle {cycle}: frontier sweep")
@@ -110,7 +136,11 @@ def run_cycle(*, cycle: int, steps: int, seed: int, use_fireworks: bool) -> dict
             "without": len((_load_json(ARTIFACTS / "measured_memory_ab.json") or {}).get("without_memory") or []),
         },
         "planner": _summarize_climb(ARTIFACTS / "planner_climb.json") if (ARTIFACTS / "planner_climb.json").is_file() else None,
-        "planner_rc": planner_rc,
+        "sponsors": {
+            "fireworks": bool(use_fireworks),
+            "modal_measure": bool(use_modal_measure),
+            "exa_research": True,
+        },
         "decoder_memory_records": len(decoder_store),
         "fifo_memory_records": len(fifo_store),
         "decoder_accepted_this_run": len(decoder.get("history", [])),
@@ -132,13 +162,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed-base", type=int, default=0)
     parser.add_argument("--pause-secs", type=int, default=20, help="pause between cycles")
     parser.add_argument("--fireworks", action="store_true", help="use Fireworks proposer when key set")
+    parser.add_argument("--modal-measure", action="store_true", help="measure decoder/planner variants through Modal")
+    parser.add_argument(
+        "--require-sponsors",
+        action="store_true",
+        help="fail unless HUD, Exa, Fireworks, and Modal are available; implies --fireworks --modal-measure",
+    )
     args = parser.parse_args(argv)
+
+    sponsor_report = _require_core_sponsors() if args.require_sponsors else None
+    if args.require_sponsors:
+        args.fireworks = True
+        args.modal_measure = True
 
     print(
         f"Improvement marathon: {args.cycles} cycles x {args.steps} steps "
         f"(log -> {MARATHON_LOG})",
         flush=True,
     )
+    if sponsor_report is not None:
+        print(json.dumps({"required_sponsors": sponsor_report}, indent=2), flush=True)
 
     for cycle in range(1, args.cycles + 1):
         run_cycle(
@@ -146,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
             steps=args.steps,
             seed=args.seed_base + cycle * 100,
             use_fireworks=args.fireworks,
+            use_modal_measure=args.modal_measure,
         )
         if cycle < args.cycles:
             time.sleep(max(0, args.pause_secs))

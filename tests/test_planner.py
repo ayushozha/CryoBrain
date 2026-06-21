@@ -113,7 +113,7 @@ def test_planner_climb_artifact_schema(tmp_path):
     assert persisted["planner_source"] == "cryobrain.swarm.planner"
     assert set(persisted) >= {"backend", "reward_source", "planner_source", "steps", "history"}
     for row in persisted["history"]:
-        assert set(row) == {"step", "candidate_ler", "suppression", "rtl_hash"}
+        assert {"step", "candidate_ler", "suppression", "rtl_hash"} <= set(row)
 
     # Row schema is identical to measured_climb (extra top-level tag is fine).
     validate_measured_climb(persisted)

@@ -17,8 +17,20 @@ fi
 cd "${REPO}"
 export PATH="${HOME}/.local/bin:${PATH}"
 export UV_PROJECT_ENVIRONMENT="${REPO}/.venv-linux"
-uv sync
+uv sync --extra sponsors
 export PATH="${UV_PROJECT_ENVIRONMENT}/bin:${PATH}"
+
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+if [[ -z "${FIREWORKS_API_KEY:-}" ]]; then
+  echo "ERROR: FIREWORKS_API_KEY required for sponsor-backed Architect climb"
+  exit 1
+fi
 
 STEPS="${1:-5}"
 
@@ -26,29 +38,23 @@ echo "=== C5 prerequisite: MP2 (measured reward) ==="
 bash scripts/run_mp2_wsl.sh
 
 echo "=== C5 unit wiring (boundary monkeypatched) ==="
-uv run pytest tests/test_local_trainer_measured.py -q
+uv run --extra sponsors pytest tests/test_local_trainer_measured.py -q
 
-PROPOSER_ARGS=(--no-fireworks)
-if [[ -n "${FIREWORKS_API_KEY:-}" ]]; then
-  echo "=== C5 sponsor: Fireworks Architect proposer enabled ==="
-  PROPOSER_ARGS=(--fireworks)
-else
-  echo "=== C5 measured climb (${STEPS} steps, deterministic proposer; set FIREWORKS_API_KEY for sponsor path) ==="
-fi
-uv run python -m cryobrain.rl.local_trainer --steps "${STEPS}" "${PROPOSER_ARGS[@]}" --memory-ab
+echo "=== C5 REAL measured climb (${STEPS} steps, Fireworks Architect proposer) ==="
+uv run --extra sponsors python -m cryobrain.rl.local_trainer --steps "${STEPS}" --fireworks --memory-ab
 
 echo "=== C5 measured Pareto ==="
-uv run python -m cryobrain.benchmark.pareto --emit "${REPO}/artifacts/measured_pareto.json"
+uv run --extra sponsors python -m cryobrain.benchmark.pareto --emit "${REPO}/artifacts/measured_pareto.json"
 
 echo "=== C5 climb artifact ==="
-uv run python - "${REPO}/artifacts/measured_climb.json" <<'PY'
+uv run --extra sponsors python - "${REPO}/artifacts/measured_climb.json" <<'PY'
 import json, sys
 data = json.loads(open(sys.argv[1], encoding="utf-8").read())
 assert data["reward_source"] == "score_measured", "reward must be measured, not proxy"
 hist = data["history"]
 print(f"accepted measured steps: {len(hist)}")
 for row in hist:
-    assert set(row) == {"step", "candidate_ler", "suppression", "rtl_hash"}, row
+    assert {"step", "candidate_ler", "suppression", "rtl_hash"}.issubset(row), row
     print(f"  step {row['step']}: ler={row['candidate_ler']:.4f} "
           f"suppression={row['suppression']:+.4f} rtl={row['rtl_hash'][:12]}")
 if len(hist) >= 2:

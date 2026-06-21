@@ -93,8 +93,7 @@ def fireworks_proposer(
     """Live Fireworks proposer (C2). Raises without ``FIREWORKS_API_KEY``."""
     from cryobrain.rl.proposer import propose_next_design
 
-    design = propose_next_design({"best": memory_snapshot})
-    return design if design is not None else mutate(best_design, rng)
+    return propose_next_design({"best": memory_snapshot})
 
 
 # --- trainer ------------------------------------------------------------------

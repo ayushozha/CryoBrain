@@ -33,6 +33,7 @@ unit test that mocks the Modal/measure boundary. The real fan-out runs on Modal.
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import os
 import shutil
@@ -41,6 +42,7 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from cryobrain.grader.score import score_measured
+from cryobrain.integrations.secrets import get_key
 from cryobrain.rl.modal_app import APP_NAME, REMOTE_TASK_DIR
 from cryobrain.types import ScenarioConfig
 
@@ -128,7 +130,9 @@ def _modal_available() -> bool:
         import modal  # noqa: F401
     except ImportError:
         return False
-    return bool(os.environ.get("MODAL_TOKEN_ID") and os.environ.get("MODAL_TOKEN_SECRET"))
+    has_token_pair = bool(get_key("MODAL_TOKEN_ID") and get_key("MODAL_TOKEN_SECRET"))
+    has_local_config = (Path.home() / ".modal.toml").is_file()
+    return has_token_pair or has_local_config
 
 
 def _build_modal_fanout():
@@ -143,24 +147,46 @@ def _build_modal_fanout():
     @app.function(
         image=image,
         timeout=60 * 30,
-        secrets=[modal.Secret.from_name("cryobrain-modal", required=False)],
+        serialized=True,
+        **_modal_secret_kwargs(modal),
     )
     def measure_remote(payload: dict[str, Any]) -> dict[str, Any]:
         # Inside the container: cryobrain pkg + task fixtures are mounted, and
         # verilator/yosys/stim are installed. Run the real measure.
+        import shutil as _shutil
+        import tempfile as _tempfile
         from pathlib import Path as _Path
 
         from cryobrain.rl.modal_measure import measure_one as _measure_one
 
-        return _measure_one(
-            payload["rtl_path"],
-            payload["scenario"],
-            shots=int(payload.get("shots", 1000)),
-            seed=int(payload.get("seed", 1729)),
-            task_root=_Path(REMOTE_TASK_DIR),
-        )
+        stage = _Path(_tempfile.mkdtemp(prefix="cryobrain-modal-rtl-"))
+        rtl_path = stage / "cryo_brain_decoder.sv"
+        rtl_path.write_text(str(payload["rtl_source"]), encoding="utf-8")
+        try:
+            result = _measure_one(
+                rtl_path,
+                payload["scenario"],
+                shots=int(payload.get("shots", 1000)),
+                seed=int(payload.get("seed", 1729)),
+                task_root=_Path(REMOTE_TASK_DIR),
+            )
+            result["rtl_path"] = payload["rtl_path"]
+            return result
+        finally:
+            _shutil.rmtree(stage, ignore_errors=True)
 
     return app, measure_remote
+
+
+def _modal_secret_kwargs(modal: Any) -> dict[str, Any]:
+    secret_name = os.environ.get("CRYOBRAIN_MODAL_SECRET")
+    if not secret_name:
+        return {}
+    try:
+        secret = modal.Secret.from_name(secret_name, required=True)
+    except TypeError:
+        secret = modal.Secret.from_name(secret_name)
+    return {"secrets": [secret]}
 
 
 def _measure_batch_modal(
@@ -172,12 +198,42 @@ def _measure_batch_modal(
 ) -> list[dict[str, Any]]:
     """Fan out one container per RTL via Modal ``.map`` (order preserved)."""
     app, measure_remote = _build_modal_fanout()
-    payloads = [
-        {"rtl_path": str(p), "scenario": scenario, "shots": shots, "seed": seed}
-        for p in rtl_paths
-    ]
+    payloads = _modal_payloads(rtl_paths, scenario, shots=shots, seed=seed)
     with app.run():
         return list(measure_remote.map(payloads))
+
+
+def _modal_payloads(
+    rtl_paths: Sequence[str | Path],
+    scenario: dict[str, Any],
+    *,
+    shots: int,
+    seed: int,
+) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for p in rtl_paths:
+        rtl_path = _modal_rtl_path(p)
+        payloads.append(
+            {
+                "rtl_path": str(rtl_path),
+                "rtl_source": rtl_path.read_text(encoding="utf-8"),
+                "scenario": scenario,
+                "shots": shots,
+                "seed": seed,
+            }
+        )
+    return payloads
+
+
+def _modal_rtl_path(path: str | Path) -> Path:
+    rtl_path = Path(path).resolve()
+    if not rtl_path.is_file():
+        raise FileNotFoundError(f"RTL not found: {rtl_path}")
+    if rtl_path.suffix.lower() != ".sv":
+        raise ValueError(f"Modal measurement only accepts SystemVerilog .sv files: {rtl_path}")
+    if "donotaccess" in rtl_path.parts:
+        raise ValueError(f"Refusing to upload hidden task material to Modal: {rtl_path}")
+    return rtl_path
 
 
 def _measure_batch_local(
@@ -249,8 +305,28 @@ def make_modal_score_fn(
     ``score_measured``-shaped dict unchanged — fully ``score_fn`` compatible.
     """
 
+    modal_app = None
+    measure_remote = None
+    modal_scenario: dict[str, Any] | None = None
+    run_context = None
+
+    if not force_local and _modal_available():
+        if isinstance(scenario, ScenarioConfig):
+            modal_scenario = {**scenario.to_dict(), "benchmark_vectors": 64}
+        else:
+            modal_scenario = dict(scenario or _load_scenario())
+        modal_app, measure_remote = _build_modal_fanout()
+
     def _score_fn(workdir: Path) -> dict[str, Any]:
+        nonlocal run_context
         rtl_path = Path(workdir) / "rtl" / "cryo_brain_decoder.sv"
+        if modal_app is not None and measure_remote is not None and modal_scenario is not None:
+            if run_context is None:
+                run_context = modal_app.run()
+                run_context.__enter__()
+                atexit.register(lambda: run_context.__exit__(None, None, None))
+            payloads = _modal_payloads([rtl_path], modal_scenario, shots=shots, seed=seed)
+            return list(measure_remote.map(payloads))[0]
         results = measure_batch(
             [rtl_path],
             scenario,
@@ -349,20 +425,32 @@ def _register_modal_entrypoint():
     except Exception:
         return None
 
-    @app.local_entrypoint()
-    def modal_main(dry_run: bool = False, rtl: str = "", shots: int = 1000, seed: int = 1729) -> None:
-        scenario = _load_scenario()
-        if dry_run:
-            # Even under `modal run --dry-run` we validate one variant end-to-end
-            # via a single remote container (real LER) without a full batch.
-            target = rtl or str(GOLDEN_RTL)
-            payload = {"rtl_path": target, "scenario": scenario, "shots": shots, "seed": seed}
-            result = measure_remote.remote(payload)
-            print(json.dumps({"dry_run": True, "modal_invoked": True, "result": result}, indent=2))
-            return
-        targets = [rtl] if rtl else [str(GOLDEN_RTL)]
-        results = measure_batch(targets, scenario, shots=shots, seed=seed)
-        print(json.dumps({"variants_measured": len(results), "results": results}, indent=2))
+    try:
+        local_entrypoint = app.local_entrypoint()
+
+        @local_entrypoint
+        def modal_main(dry_run: bool = False, rtl: str = "", shots: int = 1000, seed: int = 1729) -> None:
+            scenario = _load_scenario()
+            if dry_run:
+                # Even under `modal run --dry-run` we validate one variant end-to-end
+                # via a single remote container (real LER) without a full batch.
+                target = rtl or str(GOLDEN_RTL)
+                target_path = _modal_rtl_path(target)
+                payload = {
+                    "rtl_path": str(target_path),
+                    "rtl_source": target_path.read_text(encoding="utf-8"),
+                    "scenario": scenario,
+                    "shots": shots,
+                    "seed": seed,
+                }
+                result = measure_remote.remote(payload)
+                print(json.dumps({"dry_run": True, "modal_invoked": True, "result": result}, indent=2))
+                return
+            targets = [rtl] if rtl else [str(GOLDEN_RTL)]
+            results = measure_batch(targets, scenario, shots=shots, seed=seed)
+            print(json.dumps({"variants_measured": len(results), "results": results}, indent=2))
+    except Exception:
+        return app
 
     return app
 
