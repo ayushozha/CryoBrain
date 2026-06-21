@@ -25,7 +25,10 @@ GOLDEN = ROOT / "tasks" / "cryo_brain_decoder" / "donotaccess" / "cryo_brain_dec
 WRONG = ROOT / "tasks" / "cryo_brain_decoder" / "donotaccess" / "cryo_brain_decoder_wrong.sv"
 STARTER = ROOT / "tasks" / "cryo_brain_decoder" / "rtl" / "cryo_brain_decoder.sv"
 
-pytestmark = pytest.mark.skipif(not eda_tools_available(), reason="verilator/yosys not on PATH")
+pytestmark = [
+    pytest.mark.wsl,
+    pytest.mark.skipif(not eda_tools_available(), reason="verilator/yosys not on PATH"),
+]
 
 
 def _scenario() -> ScenarioConfig:
