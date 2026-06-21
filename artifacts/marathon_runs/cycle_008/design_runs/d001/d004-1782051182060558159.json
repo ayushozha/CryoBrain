@@ -1,0 +1,14 @@
+{
+  "design_id": "d004",
+  "measurement": {
+    "candidate_ler": 0.0,
+    "mwpm_ler": 0.198,
+    "suppression": 1.0,
+    "shots": 1000,
+    "vector_source": "Stim surface_code:rotated_memory_z detector samples",
+    "rtl_path": "/tmp/cryobrain-rollout-u1essya4/rtl/cryo_brain_decoder.sv",
+    "benchmark_vectors": 64,
+    "benchmark_failures": 0,
+    "rtl_valid": true
+  }
+}

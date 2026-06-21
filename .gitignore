@@ -26,6 +26,8 @@ __pycache__/
 /artifacts/*
 !/artifacts/baselines/
 !/artifacts/measured_*.json
+!/artifacts/marathon_runs/
+!/artifacts/marathon_runs/**
 build/
 reports/
 obj_dir/

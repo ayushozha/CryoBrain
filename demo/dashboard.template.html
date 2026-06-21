@@ -311,7 +311,7 @@
   <header>
     <div class="brand">
       <h1>CryoBrain</h1>
-      <p>A verifiable RL environment that drives quantum-decoder design optimization against a real physics + hardware reward — and compounds with memory.</p>
+      <p>A verifiable RL environment that drives quantum-decoder design optimization against a real physics + hardware reward — and reports memory A/B evidence without assuming a win.</p>
     </div>
     <div class="controls">
       <button class="primary" id="play-story">&#9654; Play story</button>
@@ -351,7 +351,7 @@
     <section class="panel" id="panel-c" data-panel="memory">
       <div class="panel-head">
         <h2>Panel C — Memory A/B</h2>
-        <span class="tagline">It compounds</span>
+        <span class="tagline">A/B evidence</span>
       </div>
       <div class="panel-body" id="body-c">
         <div class="headline" id="memory-headline"></div>
@@ -388,7 +388,7 @@
 
   <footer>
     <span class="mono" id="footer-sources"></span>
-    <span class="close">Verifiable hardware-design environments — sellable to labs today; quantum is the moonshot. Memory is the compounding asset.</span>
+    <span class="close">Verifiable hardware-design environments — sellable to labs today; quantum is the moonshot. Memory evidence is measured, not assumed.</span>
   </footer>
 
   <div id="gate-toast">
@@ -592,10 +592,13 @@
       const m = DATA.memory;
       const el = $("#memory-headline");
       if (!m || !el) return;
-      if (m.slope_ratio != null && m.without_memory?.slope != null) {
-        el.textContent = `~${mono(m.slope_ratio, 1)}× slope with memory (${mono(m.with_memory.slope, 4)} vs ${mono(m.without_memory.slope, 4)})`;
+      if (m.memory_wins === true) {
+        const slope = m.slope_ratio != null && m.without_memory?.slope != null ? `, ${mono(m.slope_ratio, 1)}x slope` : "";
+        el.textContent = `memory advantage: ${mono(m.with_memory.end_reward)} vs ${mono(m.without_memory.end_reward)}${slope}`;
       } else if (m.with_memory?.end_reward != null) {
-        el.textContent = `memory wins: ${mono(m.with_memory.end_reward)} vs ${mono(m.without_memory.end_reward)}`;
+        const delta = m.endpoint_delta != null ? `, delta ${mono(m.endpoint_delta)}` : "";
+        const label = m.status === "memory_regression" ? "memory regression" : "memory A/B parity";
+        el.textContent = `${label}: ${mono(m.with_memory.end_reward)} vs ${mono(m.without_memory.end_reward)}${delta}`;
       }
     }
 

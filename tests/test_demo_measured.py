@@ -35,6 +35,16 @@ def _measured_memory_fixture() -> dict:
     }
 
 
+def _measured_memory_tie_fixture() -> dict:
+    row_a = {"step": 0, "candidate_ler": 0.05, "suppression": 0.10, "rtl_hash": "aaa"}
+    row_b = {"step": 1, "candidate_ler": 0.04, "suppression": 0.15, "rtl_hash": "bbb"}
+    return {
+        "reward_source": "score_measured",
+        "without_memory": [row_a, row_b],
+        "with_memory": [row_a, row_b],
+    }
+
+
 def _measured_fifo_fixture() -> dict:
     return {
         "backend": "verilator+fifo-throughput",
@@ -108,8 +118,25 @@ def test_build_demo_prefers_measured_artifacts(tmp_path: Path):
     assert bundle["improvement"]["agents_keep_improving"] is True
     assert any(t["target"] == "stream_arb_fifo" for t in bundle["improvement"]["tracks"])
     assert bundle["memory"]["with_memory"]["end_reward"] == 0.15
+    assert bundle["memory"]["memory_wins"] is True
+    assert bundle["memory"]["endpoint_delta"] == 0.03
     assert len(bundle["pareto"]["points"]) == 2
     assert bundle["pareto"]["points"][0]["ler"] == 0.018
+
+
+def test_build_demo_does_not_count_memory_tie_as_win(tmp_path: Path):
+    artifacts = tmp_path / "artifacts"
+    _write_json(artifacts / "measured_climb.json", _measured_climb_fixture())
+    _write_json(artifacts / "measured_fifo_climb.json", _measured_fifo_fixture())
+    _write_json(artifacts / "measured_memory_ab.json", _measured_memory_tie_fixture())
+    _write_json(artifacts / "measured_pareto.json", _measured_pareto_fixture())
+
+    bundle = build_bundle(artifacts)
+
+    assert bundle["memory"]["memory_wins"] is False
+    assert bundle["memory"]["endpoint_delta"] == 0.0
+    assert bundle["memory"]["slope_delta"] == 0.0
+    assert bundle["memory"]["status"] == "memory_parity"
 
 
 def test_build_demo_rejects_proxy_only_artifacts(tmp_path: Path):

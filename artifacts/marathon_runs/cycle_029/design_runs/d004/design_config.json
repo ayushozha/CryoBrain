@@ -1,0 +1,9 @@
+{
+  "bitwidth": 4,
+  "num_layers": 2,
+  "parallelism": 4,
+  "pipeline_depth": 8,
+  "window_length": 8,
+  "research_pack_hash": "b27c16",
+  "prompt_influenced": true
+}

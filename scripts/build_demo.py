@@ -37,6 +37,23 @@ def _slope(history: list[dict]) -> float:
     return (end - start) / max(len(history) - 1, 1)
 
 
+def _memory_status(without: dict, with_side: dict) -> dict:
+    endpoint_delta = round(float(with_side["end_reward"]) - float(without["end_reward"]), 6)
+    slope_delta = round(float(with_side["slope"]) - float(without["slope"]), 6)
+    if endpoint_delta > 0:
+        status = "memory_advantage"
+    elif endpoint_delta < 0:
+        status = "memory_regression"
+    else:
+        status = "memory_parity"
+    return {
+        "endpoint_delta": endpoint_delta,
+        "slope_delta": slope_delta,
+        "memory_wins": endpoint_delta > 0,
+        "status": status,
+    }
+
+
 def _normalize_measured_climb(measured: dict) -> dict:
     """Adapt measured_climb.json for the dashboard reward chart."""
     rows = measured.get("history") or []
@@ -173,8 +190,8 @@ def _memory_from_measured(ab: dict) -> dict | None:
         "ok": True,
         "without_memory": without,
         "with_memory": with_side,
-        "memory_wins": with_side["end_reward"] >= without["end_reward"],
     }
+    rebuilt.update(_memory_status(without, with_side))
     if without["slope"] > 0:
         rebuilt["slope_ratio"] = round(with_side["slope"] / without["slope"], 2)
     else:
@@ -226,8 +243,8 @@ def _memory_overlay(
         "ok": True,
         "without_memory": without,
         "with_memory": with_side,
-        "memory_wins": with_side["end_reward"] >= without["end_reward"],
     }
+    rebuilt.update(_memory_status(without, with_side))
     if without["slope"] > 0:
         rebuilt["slope_ratio"] = round(with_side["slope"] / without["slope"], 2)
     else:

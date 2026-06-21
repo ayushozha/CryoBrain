@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Multi-hour measured improvement marathon: agents keep climbing and emitting artifacts.
-# Usage: bash scripts/run_improvement_marathon_wsl.sh [cycles] [steps_per_agent]
-# Example: bash scripts/run_improvement_marathon_wsl.sh 8 10
+# Usage: bash scripts/run_improvement_marathon_wsl.sh [cycles] [steps_per_agent] [pause_secs] [min_iterations]
+# Example: bash scripts/run_improvement_marathon_wsl.sh 50 2 0 50
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,6 +17,7 @@ cd "${REPO}"
 export UV_PROJECT_ENVIRONMENT="${REPO}/.venv-linux"
 uv sync --extra rl --extra sponsors
 export PATH="${UV_PROJECT_ENVIRONMENT}/bin:${PATH}"
+PYTHON="${UV_PROJECT_ENVIRONMENT}/bin/python"
 
 if [[ -f .env ]]; then
   set -a
@@ -26,7 +27,7 @@ if [[ -f .env ]]; then
 fi
 
 if [[ -z "${MODAL_TOKEN_ID:-}" || -z "${MODAL_TOKEN_SECRET:-}" ]]; then
-  MODAL_TOML="/mnt/c/Users/ayush/.modal.toml"
+  MODAL_TOML="${MODAL_TOML:-${HOME}/.modal.toml}"
   if [[ -f "${MODAL_TOML}" ]]; then
     eval "$(python3 - "${MODAL_TOML}" <<'PY'
 import shlex
@@ -50,17 +51,20 @@ fi
 
 CYCLES="${1:-6}"
 STEPS="${2:-10}"
+PAUSE_SECS="${3:-0}"
+MIN_ITERATIONS="${4:-${CYCLES}}"
 echo "=== Marathon: required sponsor connectivity ==="
-uv run --extra rl --extra sponsors python scripts/check_sponsors.py --require-core
+"${PYTHON}" scripts/check_sponsors.py --require-core
 
-echo "=== Improvement marathon: ${CYCLES} cycles x ${STEPS} steps ==="
+echo "=== Improvement marathon: ${CYCLES} cycles x ${STEPS} steps, ${PAUSE_SECS}s pause, min ${MIN_ITERATIONS} archived iterations ==="
 echo "=== Log: artifacts/improvement_marathon.jsonl ==="
 
-uv run --extra rl --extra sponsors python scripts/run_improvement_marathon.py \
+"${PYTHON}" scripts/run_improvement_marathon.py \
   --cycles "${CYCLES}" \
   --steps "${STEPS}" \
-  --pause-secs 15 \
+  --pause-secs "${PAUSE_SECS}" \
+  --min-iterations "${MIN_ITERATIONS}" \
   --require-sponsors
 
 echo "=== Marathon artifacts ==="
-ls -la artifacts/measured_climb.json artifacts/measured_fifo_climb.json artifacts/improvement_marathon.jsonl 2>/dev/null || true
+ls -la artifacts/measured_climb.json artifacts/measured_fifo_climb.json artifacts/improvement_marathon.jsonl artifacts/measured_50_iteration_summary.json 2>/dev/null || true

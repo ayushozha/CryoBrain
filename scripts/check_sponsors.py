@@ -20,22 +20,41 @@ from cryobrain.integrations.secrets import get_key
 CORE_SPONSORS = ("hud", "exa", "fireworks", "modal")
 
 
+def _modal_ready() -> tuple[bool, str | None]:
+    has_creds = bool(
+        (get_key("MODAL_TOKEN_ID") and get_key("MODAL_TOKEN_SECRET"))
+        or (Path.home() / ".modal.toml").is_file()
+    )
+    if not has_creds:
+        return False, "missing MODAL_TOKEN_ID/MODAL_TOKEN_SECRET or ~/.modal.toml"
+    try:
+        import modal
+    except Exception as exc:  # noqa: BLE001 - import guard for optional sponsor SDK
+        return False, f"modal import failed: {exc}"
+    builder_data = Path(modal.__file__).parent / "builder" / "base-images.json"
+    if not builder_data.is_file():
+        return False, f"modal package missing {builder_data}"
+    return True, None
+
+
 def build_report() -> dict[str, object]:
+    modal_ready, modal_error = _modal_ready()
     report: dict[str, object] = {
         "hud": bool(get_key("HUD_API_KEY")),
         "exa": False,
         "fireworks": False,
         "daytona": False,
         "antim": False,
-        "modal": bool(
-            (get_key("MODAL_TOKEN_ID") and get_key("MODAL_TOKEN_SECRET"))
-            or (Path.home() / ".modal.toml").is_file()
-        ),
+        "modal": modal_ready,
     }
+    if modal_error:
+        report["modal_error"] = modal_error
     try:
         hits = search_decoder_literature(num_results=2)
         report["exa"] = len(hits) > 0
         report["exa_hits"] = len(hits)
+        report["exa_urls"] = [hit.get("url") for hit in hits if hit.get("url")]
+        report["exa_titles"] = [hit.get("title") for hit in hits if hit.get("title")]
     except Exception as exc:
         report["exa"] = False
         report["exa_error"] = str(exc)

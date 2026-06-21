@@ -1,0 +1,25 @@
+{
+  "layers_passed": [
+    "L1",
+    "L2",
+    "L4",
+    "L5"
+  ],
+  "l1": {
+    "passed": true
+  },
+  "l3": {
+    "passed": false,
+    "skipped": true,
+    "reason": "L3 formal pending (SPEC-v6)"
+  },
+  "l4": {
+    "passed": true
+  },
+  "l5": {
+    "passed": true
+  },
+  "all_gates_passed": true,
+  "design_id": "d001",
+  "source_design_id": "d004"
+}

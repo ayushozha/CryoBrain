@@ -17,7 +17,7 @@ if [[ -f .env ]]; then
 fi
 
 if [[ -z "${MODAL_TOKEN_ID:-}" || -z "${MODAL_TOKEN_SECRET:-}" ]]; then
-  MODAL_TOML="/mnt/c/Users/ayush/.modal.toml"
+  MODAL_TOML="${MODAL_TOML:-${HOME}/.modal.toml}"
   if [[ -f "${MODAL_TOML}" ]]; then
     eval "$(python3 - "${MODAL_TOML}" <<'PY'
 import shlex
