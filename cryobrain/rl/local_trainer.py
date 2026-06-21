@@ -6,9 +6,8 @@ Each step is the measured loop (driven through :mod:`cryobrain.rl.proposal_loop`
         -> score_measured -> record_variant
 
 A step is *accepted* when its MEASURED suppression improves on the best so far.
-The reward moves only on measured change (Grok ``score_measured``); there is NO
-``estimate_hardware_metrics`` / ``decoder_quality_multiplier`` / ``simulate_candidate_ler``
-formula anywhere in this path — the old proxy trainer is gone.
+The reward moves only on measured change (Grok ``score_measured``); there is no
+legacy formula-LER or knob-sweep proxy path here — the old proxy trainer is gone.
 
 Proposer:
   * default (``--no-fireworks``, the Windows-safe path): a deterministic proposer
