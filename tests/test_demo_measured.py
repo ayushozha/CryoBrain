@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -108,11 +110,8 @@ def test_build_demo_rejects_proxy_only_artifacts(tmp_path: Path):
         ],
     )
 
-    try:
+    with pytest.raises(MissingMeasuredArtifactsError):
         build_bundle(artifacts)
-        raise AssertionError("expected MissingMeasuredArtifactsError")
-    except MissingMeasuredArtifactsError:
-        pass
 
 
 def test_build_demo_includes_swarm_timeline_when_log_present(tmp_path: Path):

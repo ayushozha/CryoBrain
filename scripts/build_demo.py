@@ -330,8 +330,14 @@ def build_bundle(artifacts_dir: Path | None = None, *, require_measured: bool = 
 
     swarm_timeline = build_swarm_timeline(artifacts / "swarm" / "event_log.jsonl")
 
+    if require_measured:
+        data_era = "measured"
+    else:
+        eras = {climb_era, memory_era, pareto_era} - {"missing"}
+        data_era = "measured" if eras == {"measured"} else ("mixed" if eras else "missing")
+
     return {
-        "data_era": "measured" if require_measured else climb_era,
+        "data_era": data_era,
         "waveform": waveform,
         "climb": climb,
         "memory": memory,

@@ -11,11 +11,18 @@ ROOT = Path(__file__).resolve().parents[1]
 TASK = ROOT / "tasks" / "cryo_brain_decoder"
 GOLDEN = TASK / "donotaccess" / "cryo_brain_decoder_golden.sv"
 
-stage = Path(tempfile.mkdtemp())
-shutil.copytree(TASK, stage, dirs_exist_ok=True)
-shutil.copy2(GOLDEN, stage / "rtl" / "cryo_brain_decoder.sv")
-result = score_measured(stage)
-print(
-    f"golden valid={result['valid']} layers={result['layers_passed']} "
-    f"reward={result['reward']:.4f} sup={result['suppression']:.4f} ler={result['ler']:.4f}"
-)
+
+def main() -> None:
+    with tempfile.TemporaryDirectory(prefix="cryobrain-golden-check-") as tmp:
+        stage = Path(tmp)
+        shutil.copytree(TASK, stage, dirs_exist_ok=True)
+        shutil.copy2(GOLDEN, stage / "rtl" / "cryo_brain_decoder.sv")
+        result = score_measured(stage)
+        print(
+            f"golden valid={result['valid']} layers={result['layers_passed']} "
+            f"reward={result['reward']:.4f} sup={result['suppression']:.4f} ler={result['ler']:.4f}"
+        )
+
+
+if __name__ == "__main__":
+    main()

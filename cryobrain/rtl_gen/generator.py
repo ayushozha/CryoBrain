@@ -120,6 +120,8 @@ def generate_rtl(design: DesignConfig, out_dir: Path) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     rtl_path = out_dir / "cryo_brain_decoder.sv"
+    # Measured cold-start only: reference RTL for P-gate baseline (SPEC-v6 honest ceiling).
+    # Parametric mutants use render_rtl(); do not use this path for hidden-grade rollouts.
     if design == GOLDEN_BASELINE and _GOLDEN_RTL.is_file():
         shutil.copy2(_GOLDEN_RTL, rtl_path)
         return rtl_path
