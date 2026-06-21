@@ -58,6 +58,11 @@ class TrainConfig:
     curriculum: tuple[CurriculumStage, ...] = field(default_factory=default_curriculum)
     output: str = "artifacts/climb_chart.json"
     designs_output: str = "artifacts/designs.json"
+    memory_enabled: bool = False
+    use_fireworks: bool = False
+    exa_seed: bool = False
+    memory_buffer: str = "artifacts/verified_memory.json"
+    memory_top_k: int = 3
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -66,6 +71,11 @@ class TrainConfig:
             "curriculum": [s.to_dict() for s in self.curriculum],
             "output": self.output,
             "designs_output": self.designs_output,
+            "memory_enabled": self.memory_enabled,
+            "use_fireworks": self.use_fireworks,
+            "exa_seed": self.exa_seed,
+            "memory_buffer": self.memory_buffer,
+            "memory_top_k": self.memory_top_k,
         }
 
     @classmethod
@@ -97,4 +107,9 @@ class TrainConfig:
             curriculum=curriculum,
             output=str(data.get("output", "artifacts/climb_chart.json")),
             designs_output=str(data.get("designs_output", "artifacts/designs.json")),
+            memory_enabled=bool(data.get("memory_enabled", False)),
+            use_fireworks=bool(data.get("use_fireworks", False)),
+            exa_seed=bool(data.get("exa_seed", False)),
+            memory_buffer=str(data.get("memory_buffer", "artifacts/verified_memory.json")),
+            memory_top_k=int(data.get("memory_top_k", 3)),
         )

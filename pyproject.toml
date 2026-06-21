@@ -19,6 +19,14 @@ dependencies = [
 
 [project.optional-dependencies]
 rl = ["modal>=0.67"]
+sponsors = [
+    "modal>=0.67",
+    "exa-py>=1.0",
+    "openai>=1.0",
+    "python-dotenv>=1.0",
+]
+# Daytona SDK pulls native wheels; install in Linux/WSL when needed:
+#   uv pip install daytona
 
 [dependency-groups]
 dev = [

@@ -23,15 +23,21 @@ def _build_modal_app():
     """Construct the optional Modal app, or raise ImportError if Modal is unavailable."""
     import modal
 
+    root = Path(__file__).resolve().parents[2]
     image = (
         modal.Image.debian_slim(python_version="3.12")
+        .apt_install("verilator", "yosys")
         .pip_install(
             "stim>=1.14",
             "pymatching>=2.0",
             "numpy>=1.26",
             "matplotlib>=3.8",
+            "exa-py>=1.0",
+            "openai>=1.0",
+            "python-dotenv>=1.0",
         )
-        .add_local_python_source("cryobrain")
+        .add_local_dir(root / "cryobrain", remote_path="/root/cryobrain")
+        .add_local_dir(root / "tasks" / "cryo_brain_decoder", remote_path="/root/tasks/cryo_brain_decoder")
     )
 
     app = modal.App(APP_NAME)

@@ -11,6 +11,10 @@ from typing import Callable
 
 from cryobrain.calibration.cp3 import stage_workdir
 from cryobrain.cost_model.npu_cost import estimate_hardware_metrics
+from cryobrain.integrations.exa_rag import search_decoder_literature, seed_memory_tags
+from cryobrain.integrations.fireworks import propose_design_config
+from cryobrain.memory.buffer import VerifiedDesignBuffer
+from cryobrain.memory.retrieve import retrieve
 from cryobrain.reward.compute_reward import ler_suppression_vs_mwpm
 from cryobrain.rl.config import CurriculumStage, TrainConfig
 from cryobrain.types import DesignConfig
@@ -83,6 +87,66 @@ def _stage_index(step: int, steps: int, stages: list[CurriculumStage]) -> int:
     return min(len(stages) - 1, step * len(stages) // max(steps, 1))
 
 
+def _design_from_dict(raw: dict[str, object]) -> DesignConfig:
+    return DesignConfig(
+        bitwidth=int(raw.get("bitwidth", 4)),
+        num_layers=int(raw.get("num_layers", 1)),
+        parallelism=int(raw.get("parallelism", 1)),
+        pipeline_depth=int(raw.get("pipeline_depth", 4)),
+        window_length=int(raw.get("window_length", 8)),
+    )
+
+
+def _mutate_from_exemplar(exemplar: dict[str, object], step: int, seed: int) -> DesignConfig:
+    """Perturb a high-reward exemplar to explore nearby design space."""
+    raw = exemplar.get("design", {})
+    base = DesignConfig.from_dict(raw if isinstance(raw, dict) else {})
+    rng = random.Random(seed * 1009 + step)
+    knobs = ("bitwidth", "num_layers", "parallelism", "pipeline_depth", "window_length")
+    values = list(base.to_dict().values())
+    idx = step % len(knobs)
+    choices = {
+        "bitwidth": [2, 4, 8],
+        "num_layers": [1, 2, 4],
+        "parallelism": [1, 2, 4],
+        "pipeline_depth": [2, 4, 8, 16],
+        "window_length": [4, 8, 12, 16],
+    }
+    key = knobs[idx]
+    pool = choices[key]
+    current = getattr(base, key)
+    alt = [v for v in pool if v != current]
+    if alt:
+        values[idx] = rng.choice(alt)
+    return DesignConfig(**dict(zip(knobs, values, strict=True)))
+
+
+def _pick_candidate(
+    *,
+    step: int,
+    candidates: list[DesignConfig],
+    config: TrainConfig,
+    scenario: dict[str, object],
+    buffer: VerifiedDesignBuffer | None,
+) -> tuple[DesignConfig, list[dict[str, object]]]:
+    exemplars: list[dict[str, object]] = []
+    if config.memory_enabled and buffer is not None:
+        exemplars = retrieve(
+            {"scenario": scenario},
+            buffer_path=config.memory_buffer,
+            k=config.memory_top_k,
+        )
+        if exemplars:
+            return _mutate_from_exemplar(exemplars[0], step, config.seed), exemplars
+
+    if config.use_fireworks and step % 5 == 4:
+        proposed = propose_design_config(scenario=scenario, exemplars=exemplars)
+        if proposed is not None:
+            return proposed, exemplars
+
+    return candidates[step % len(candidates)], exemplars
+
+
 def _metric(subscores: dict[str, object], name: str, key: str, default: float = 0.0) -> float:
     section = subscores.get(name, {})
     if not isinstance(section, dict):
@@ -105,6 +169,10 @@ def run_graded_training(
     base_scenario = json.loads((task_root / "scenario.json").read_text(encoding="utf-8"))
     candidates = _design_sweep(config.seed)
     stages = list(config.curriculum)
+    buffer = VerifiedDesignBuffer(config.memory_buffer) if config.memory_enabled else None
+    exa_tags: list[str] = []
+    if config.exa_seed:
+        exa_tags = seed_memory_tags(search_decoder_literature())
 
     history: list[dict[str, object]] = []
     designs: list[dict[str, object]] = []
@@ -127,8 +195,14 @@ def run_graded_training(
             )
             last_stage_idx = stage_idx
 
-        candidate = candidates[step % len(candidates)]
         scenario = _scenario_for_stage(base_scenario, stage, seed=config.seed, step=step)
+        candidate, exemplars = _pick_candidate(
+            step=step,
+            candidates=candidates,
+            config=config,
+            scenario=scenario,
+            buffer=buffer,
+        )
         workdir = stage_workdir(task_root, scenario=scenario, design=candidate.to_dict())
         result = grade_fn(workdir)
         candidate_reward = float(result["reward"])
@@ -158,8 +232,24 @@ def run_graded_training(
                 _metric(subscores, "rtl_validity", "benchmark_exactness"),
                 6,
             ),
+            "memory_exemplars": len(exemplars),
         }
         history.append(row)
+
+        if buffer is not None and candidate_reward > 0.0 and not result.get("hard_caps"):
+            latency_section = subscores.get("latency", {})
+            metrics = latency_section.get("result", {}) if isinstance(latency_section, dict) else {}
+            if not isinstance(metrics, dict):
+                metrics = estimate_hardware_metrics(candidate).to_dict()
+            buffer.add_from_grade(
+                design=candidate.to_dict(),
+                reward=candidate_reward,
+                metrics=metrics,
+                distance=stage.distance,
+                noise_rate=stage.noise_rate,
+                source="cp4_trainer",
+                tags=exa_tags,
+            )
 
         if candidate_reward > 0.0 and not result.get("hard_caps"):
             latency_section = subscores.get("latency", {})
@@ -197,6 +287,10 @@ def run_graded_training(
     }
     payload: dict[str, object] = {
         "backend": "real_local",
+        "memory_enabled": config.memory_enabled,
+        "use_fireworks": config.use_fireworks,
+        "exa_seed": config.exa_seed,
+        "memory_records": len(buffer) if buffer is not None else 0,
         "reward_source": str(task_root / "donotaccess" / "grade.py"),
         "config": config.to_dict(),
         "steps": config.steps,

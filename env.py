@@ -148,6 +148,23 @@ async def run_eval() -> str:
 
 
 @env.tool()
+async def retrieve_exemplars(k: int = 3) -> str:
+    """Retrieve top verified-design exemplars for the current scenario (SPEC2 F7)."""
+    from cryobrain.memory.retrieve import retrieve
+
+    scenario = _read_json(WORKSPACE_ROOT / "scenario.json")
+    task = {
+        "scenario": scenario,
+        "distance": scenario.get("distance", 3),
+        "noise_rate": scenario.get("noise_rate", 0.001),
+    }
+    exemplars = retrieve(task, k=k)
+    global _last_observation
+    _last_observation = {**_last_observation, "memory_exemplars": exemplars}
+    return json.dumps(exemplars, indent=2)
+
+
+@env.tool()
 async def run_eval_preview() -> str:
     """Run a lightweight local preview of lint/sim (agent-visible only; hidden grader is authoritative)."""
     global _last_observation
