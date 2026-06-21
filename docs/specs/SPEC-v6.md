@@ -15,15 +15,17 @@ A self-improving AI hardware lab that designs the real-time NPU "brain" inside f
 | Phase | Item | Status | Evidence |
 |-------|------|--------|----------|
 | Spine | MP0–MP2 measured reward | **Green** | `run_mp0_wsl.sh` … `run_mp2_wsl.sh` |
-| P-gate | Architect climb on disk | **Pending WSL run** | `run_c5_climb_wsl.sh` → `artifacts/measured_climb.json` |
-| P-gate | Memory A/B on disk | **Pending WSL run** | `--memory-ab` in C5 climb |
+| P-gate | Architect climb on disk | **Green** | `artifacts/measured_climb.json` (WSL `run_c5_climb_wsl.sh`) |
+| P-gate | Memory A/B on disk | **Green** | `artifacts/measured_memory_ab.json` |
+| P-research | Research context pack (Exa) | **Built** | `research_step` → `ContextPack` in `executors.py` |
+| P-research | Research → self-adoption loop | **Partial** | pack emitted; full prompt/memory/planner wiring required (§2.5) |
 | P-bus | Event log message bus | **Built** | `cryobrain/swarm/event_bus.py` |
 | P-exec | Tier-2 executors on bus | **Built** | `cryobrain/swarm/executors.py`, `proposal_loop.py` |
 | P-viz | Visualization from events | **Built** | `cryobrain/swarm/visualization.py`, demo swarm strip |
 | P-train2 | Planner trained agent | **Built** | `cryobrain/swarm/planner.py`, `planner_trainer.py` |
 | MP5 | L3 formal + verification report | **Built** | `l3_formal.py`, `verification_report.py` (sby skips gracefully) |
 | P-gen | FIFO platform proof | **Code built** | `run_gen_fifo_wsl.sh`, `test_gen_fifo.py` |
-| Demo | Measured-first bundle | **Built** | `build_demo.py` prefers `measured_*.json` |
+| Demo | Measured-only bundle | **Built** | `build_demo.py` requires `measured_*.json`; no proxy fallback |
 
 **Gate script:** `wsl bash scripts/run_spec_v6_gate_wsl.sh`
 
@@ -37,7 +39,7 @@ A self-improving AI hardware lab that designs the real-time NPU "brain" inside f
 
 ### Slow loop — the swarm improves the next chip
 
-`[BUILT — this is what you run tonight]` Outside the chip, the agent swarm runs a scientific loop: research → propose → generate RTL → simulate → synthesize → score → remember → improve, every step measured. This is the prototype you demo.
+`[BUILT — this is what you run tonight]` Outside the chip, the agent swarm runs a scientific loop: research → propose → generate RTL → simulate → synthesize → score → remember → improve, every step measured. **New research must trigger self-adoption** — each Exa `context_pack` biases the trained agents' next proposals and tags verified winners so the swarm compounds (§2.5). This is the prototype you demo.
 
 **Pitch:** Every quantum chip needs a brain. CryoBrain is the swarm that designs that brain (slow loop, built), and the real-time NPU that keeps the chip alive (fast loop, 2040 arc).
 
@@ -59,7 +61,7 @@ Each agent is real and owns a role in the measured loop. But only reward-bearing
 
 | Agent | Role | Why fixed-policy | Tag |
 |-------|------|------------------|-----|
-| **Research** | reads QEC/decoder/cryo papers (Exa) → priors/context | retrieval, no "better/worse" signal | `[BUILT — executor]` |
+| **Research** | reads QEC/decoder/cryo papers (Exa) → priors/context; **triggers self-adoption** in trained agents (§2.5) | retrieval seeds search; adoption verified by measured reward | `[BUILT — executor; adoption loop §2.5]` |
 | **RTL** | generates synthesizable Verilog from a `DesignConfig` | deterministic generation | `[BUILT — executor]` |
 | **Measurement** | runs Stim + Verilator + Yosys → measured numbers | correct or a bug; nothing to learn | `[BUILT — executor]` |
 | **Verifier** | runs L1–L5 gates | pass/fail logic | `[BUILT — executor]` |
@@ -110,6 +112,87 @@ Agents communicate through an append-only event log — one JSON event per actio
 **Rule:** any event with `measured: true` MUST carry an `artifact_ref` to a real file. The Visualization agent may only animate `measured: true` events as "results"; proposals/plans render as "in progress," never as outcomes.
 
 **Implementation:** `artifacts/swarm/event_log.jsonl` via `cryobrain/swarm/event_bus.py`.
+
+---
+
+## 2.5 Research-triggered self-adoption (what makes the swarm get better)
+
+New research is not decoration. Every fresh literature pull must **change what the trained agents try next** and leave a traceable adoption trail. The swarm compounds: papers → priors → proposals → measured winners → memory → better proposals.
+
+### The adoption contract
+
+| Rule | Requirement | Tag |
+|------|-------------|-----|
+| **Trigger** | Each pipeline step begins with Research emitting a `context_pack` bus event (Exa hits + provenance URLs) | `[BUILT]` |
+| **Consume** | The returned `ContextPack` is consumed by Tier-1 agents on the **same step** — not logged and discarded | `[REQUIRED]` |
+| **Verify** | A research idea counts as "adopted" only when a design it influenced passes L1–L5 and earns a **measured** reward gain | `[BUILT — keystone]` |
+| **Compound** | Verified winners store `exa:<url>` provenance tags; Memory retrieval biases future steps toward designs citing overlapping literature | `[PARTIAL]` |
+
+**Honest ceiling:** research accelerates search; it never substitutes for measurement. A paper cannot raise suppression without a measured RTL artifact.
+
+### Three adoption channels (all required for "self-improving lab")
+
+```
+Exa fetch → ContextPack
+                ├─► Architect: prompt_block() splices into proposer/GRPO prompt before propose
+                ├─► Planner: pack themes bias knob choice (explore vs exploit, which dimension to mutate)
+                └─► Memory: memory_tags() on verified winners; retrieval ranks overlap with current pack
+```
+
+1. **Architect prompt bias** — `ContextPack.prompt_block()` is injected into the Architect's proposal prompt (Fireworks/GRPO or local mutator) so the next `DesignConfig` reflects current literature, not only random mutation.
+2. **Planner direction** — the Planner reads the active pack (or its tag set) when choosing the next knob/direction; new papers can shift explore→exploit or prioritize a decoder axis the literature highlights.
+3. **Memory compounding** — when a variant is verified, `memory_tags()` from the step's pack are stored on the `MemoryRecord`. Later steps retrieve winners whose provenance overlaps the current pack, closing the research→memory→proposal loop.
+
+### Bus events for adoption (audit trail)
+
+Research adoption must be visible on the bus and in artifacts:
+
+```json
+{
+  "ts": "2026-06-21T08:00:00Z",
+  "agent": "Research",
+  "action": "context_pack",
+  "design_id": "d003",
+  "payload": {"query": "neural surface code decoder", "hit_count": 5, "urls": ["https://…"]},
+  "measured": false
+}
+```
+
+```json
+{
+  "ts": "2026-06-21T08:00:04Z",
+  "agent": "Architect",
+  "action": "propose",
+  "design_id": "d003",
+  "payload": {"bitwidth": 4, "research_pack_hash": "a1b2c3", "prompt_influenced": true},
+  "measured": false
+}
+```
+
+```json
+{
+  "ts": "2026-06-21T08:00:45Z",
+  "agent": "Memory",
+  "action": "store",
+  "design_id": "d003",
+  "payload": {"tags": ["exa:https://…"], "suppression": 1.0},
+  "measured": true,
+  "artifact_ref": "artifacts/measured/d003.json"
+}
+```
+
+**Implementation hooks (existing):** `cryobrain/swarm/executors.py` (`research_step`), `cryobrain/retrieval/context_pack.py` (`prompt_block`, `memory_tags`), `cryobrain/rl/proposal_loop.py` (pipeline order). **Gap:** `run_proposal_step` currently calls `research_step` but does not yet thread the returned pack into propose/plan/memory — that wiring is the P-research adoption gate.
+
+### P-research adoption gate
+
+Before claiming "the swarm self-improves from literature," all of the following must be true on disk:
+
+- [ ] Every `run_proposal_step` threads the step's `ContextPack` into Architect propose (and Planner plan when enabled).
+- [ ] Verified memory records carry `exa:` tags from the pack that seeded that step.
+- [ ] `artifacts/swarm/event_log.jsonl` from a real measured run shows Research → Architect → … → Memory with `prompt_influenced: true` on at least one accepted step.
+- [ ] Demo or climb artifact documents at least one adoption chain: new URLs in pack → different proposal → measured outcome (gain or honest rejection with artifact ref).
+
+**Claim tag:** "research continuously improves the swarm" is `[CLAIMABLE]` only after the P-research adoption gate passes; until then say "research retrieval is built; adoption loop wiring in progress."
 
 ---
 
@@ -165,6 +248,7 @@ A design is never scored until all required layers pass.
 | **P-gate** | Architect measured climb on disk (MP3) + memory A/B (MP4), committed FIRST | **NOW** | — |
 | **P-bus** | the event-log message bus; refactor agents to emit/consume events | parallel from t=0 | — |
 | **P-exec** | wire all Tier-2 executors as real role-separated services on the bus | parallel from t=0 | — |
+| **P-research** | close the research→adopt loop: pack → Architect/Planner prompt + memory tags (§2.5) | after P-bus | adoption gate |
 | **P-viz** | Visualization agent: Gizmo binds to the `measured:true` event stream | after P-bus | — |
 | **P-train2** | add Planner as a second trained agent → its own climb on disk | after P-gate | — |
 | **P-verify** | L3 formal (X3) + verification report (X7) → full MP5 | after P-gate | — |
@@ -199,6 +283,7 @@ A design is never scored until all required layers pass.
 | "each design is real synthesizable RTL, synthesized per variant" | MP1 |
 | "the Architect agent is RL-trained on a measured reward and improves" | committed climb |
 | "a multi-agent swarm: design agents trained, specialists execute the verified pipeline" | P-bus + P-exec |
+| "new research triggers the swarm to improve and self-adopt better designs" | P-research adoption gate (§2.5) |
 | "demonstrated on two targets (decoder + FIFO) — a general engine" | P-gen |
 | "we produce manufacturing-ready verified RTL" | — NOT "mass-produced silicon" |
 | the fast loop | always "the 2040 direction," NEVER "our chip does this now" |
@@ -213,7 +298,8 @@ A design is never scored until all required layers pass.
 - [x] Visualization bound to `measured:true` events only (no scripted results).
 - [x] L1–L5 gate every score (X3 + X7 land for full MP5; L3 skips when sby absent).
 - [x] Planner as a 2nd trained agent with climb artifact path (`planner_climb.json`).
-- [ ] **Architect measured climb committed on disk (MP3) + memory A/B (MP4).** ← the gate
+- [x] Architect measured climb committed on disk (MP3) + memory A/B (MP4).
+- [ ] **Research self-adoption loop closed (§2.5):** pack threads into Architect/Planner; memory tags on verified winners; adoption visible in event log.
 - [ ] Platform proof: swarm runs the FIFO target; live HUD eval green.
 - [ ] Demo rehearsed; backup recorded off measured data; every claim on its earned rung (§8).
 - [ ] Business arc: beachhead (verification env today) + moonshot (quantum brain) + two-loop framing.
@@ -229,9 +315,10 @@ A design is never scored until all required layers pass.
 | **Technical grounding** | 9/10 | Measured spine + L1–L5 moat + sponsor roles map cleanly to repo modules. |
 | **Scope control** | 8/10 | Nine roles but explicitly limits RL to Tier 1 — avoids "everything learns" trap. |
 | **Gating clarity** | 10/10 | P-gate (one committed climb) is the right forcing function before swarm claims. |
-| **Implementation fit** | 8/10 | Bus/exec/viz/planner/L3/report now exist on `main`; artifact commit + FIFO WSL proof remain. |
+| **Implementation fit** | 8/10 | Bus/exec/viz/planner/L3/report exist; measured artifacts committed; research adoption wiring + FIFO WSL proof remain. |
+| **Self-improvement loop** | 7/10 | §2.5 defines research→adopt contract; executor hooks built, closed-loop prompt/memory wiring is the next lift. |
 
-**Overall: 8.7/10** — One of the strongest honest hackathon specs in the repo. The remaining gap is operational: run WSL gates, commit `measured_*.json`, rehearse the demo once on measured data.
+**Overall: 8.6/10** — Strong honest spec with measured spine on disk. Remaining gaps: close §2.5 adoption loop, FIFO platform proof, demo rehearsal on measured data.
 
 ---
 
