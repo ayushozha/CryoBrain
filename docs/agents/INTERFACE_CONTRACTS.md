@@ -27,12 +27,15 @@ def measure_candidate_ler(
 def generate_rtl(design: DesignConfig, out_dir: Path) -> Path: ...
 ```
 
-## `synth_metrics` — Grok G5 (MP1)
+## `synth_metrics` — Grok G5 (MP1) ✅
 
 ```python
-# cryobrain/rtl_grader/synth_metrics.py  — not yet landed
-def synth_metrics(rtl_path: Path) -> dict: ...
+# cryobrain/rtl_grader/synth_metrics.py
+def synth_metrics(rtl_path: Path) -> SynthMetrics: ...
+# area_um2, latency_cycles, power_mw_est, valid, yosys_log_path, cell_count
 ```
+
+**MP1:** `wsl bash scripts/run_mp1_wsl.sh` — 3 presets → 3 distinct cell counts + LER spread.
 
 ## `score_measured` — Grok G10 (MP2)
 

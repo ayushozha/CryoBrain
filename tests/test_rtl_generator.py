@@ -13,6 +13,15 @@ def test_render_contains_xor_policy():
     sv = render_rtl(DesignConfig())
     assert "^" in sv
     assert "module cryo_brain_decoder" in sv
+    assert "PIPELINE_DEPTH" in sv
+    assert "NUM_LAYERS" in sv
+
+
+def test_degraded_single_layer_uses_or():
+    from cryobrain.types import DesignConfig
+
+    sv = render_rtl(DesignConfig(num_layers=1, pipeline_depth=8, bitwidth=2))
+    assert "|" in sv
 
 
 def test_generate_rtl_writes_file(tmp_path):
