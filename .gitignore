@@ -32,3 +32,6 @@ sim_build/
 # IDE / local tooling
 mcps/
 .gstack/
+
+# Terminal-capture scratch (numbered .txt logs + .next-id counter)
+terminals/
