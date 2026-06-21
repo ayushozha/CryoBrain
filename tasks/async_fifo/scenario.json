@@ -1,0 +1,7 @@
+{
+  "target": "stream_arb_fifo",
+  "metric": "sustained_throughput",
+  "traffic_cycles": 64,
+  "traffic_seed": 1729,
+  "baseline_depth": 1
+}
