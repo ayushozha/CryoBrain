@@ -66,7 +66,7 @@ Agent tools:
 
 | CP | SPEC2 meaning | Status | Evidence |
 |---|---|---|---|
-| **CP0** | HUD `hud eval` on stock FIFO | Partial | `env.py` scaffolded; live eval not proven |
+| **CP0** | HUD `hud eval` on stock FIFO | **Green (WSL)** | Live eval ~82s; mean reward **0.250** ([job](https://hud.ai/jobs/d5e730a977f04df59875afd1f3c022ba)) |
 | **CP1** | Stim LER harness | Done | `benchmark.py` / `stim_harness.py` |
 | **CP2** | Validity gate | Green (WSL) | wrong=0, starter≈0.36, golden≈0.63 |
 | **CP3** | Calibration 20–50% | Green (WSL) | mean≈0.357, spread≈0.115 |
@@ -198,7 +198,7 @@ c0470aa feat: CP3 multi-rollout reward calibration gate
 
 | Item | Status |
 |---|---|
-| CP0–CP7 green | CP0 + Modal CP4 artifact remain |
+| CP0–CP7 green | Modal CP4 artifact remain |
 | Reward = gate + LER + hardware, 20–50% band | Done |
 | Real `.sv` → Yosys + Verilator | Done |
 | Climb chart + memory-on-vs-off overlay | Local/WSL done; Modal pending |
@@ -206,7 +206,29 @@ c0470aa feat: CP3 multi-rollout reward calibration gate
 | Beachhead + moonshot business slide | Not started |
 | CP8 classical fallback | Done |
 
-**Overall progress: ~82%**
+**Overall progress: ~85%**
+
+---
+
+## CP0 Evidence (2026-06-21)
+
+Command (WSL):
+
+```bash
+wsl bash /mnt/c/Users/ayush/Desktop/Hackathons/YC/06-20-2026/scripts/run_cp0_wsl.sh
+# equivalent: hud eval tasks.py claude --task-ids stream-arb-fifo-cocotb-dv --group 1 -y
+```
+
+| Field | Value |
+|---|---|
+| Task | `stream-arb-fifo-cocotb-dv` |
+| Agent | `claude` (claude-sonnet-4-6 via HUD Gateway) |
+| Runtime | local |
+| Duration | 82.1s |
+| Mean reward | **0.250** (matches starter testbench calibration) |
+| HUD job | https://hud.ai/jobs/d5e730a977f04df59875afd1f3c022ba |
+
+No `ANTHROPIC_API_KEY` required — calls routed through HUD Gateway with `HUD_API_KEY`.
 
 ---
 
@@ -246,7 +268,7 @@ python scripts/check_sponsors.py
 
 1. **Modal GPU climb chart** — sponsor-backed CP4 artifact for demo slide #5
 2. **Fireworks GRPO** — model writes decoder RTL, not just knob sweep (full F6 vision)
-3. **CP0** — live `hud eval` on `stream-arb-fifo-cocotb-dv`
+3. ~~**CP0** — live `hud eval` on `stream-arb-fifo-cocotb-dv`~~ **Done** (2026-06-21)
 4. **WS7 demo deck** — 2-min demo per SPEC2 §10 + beachhead/moonshot business narrative
 5. **Antim concept visual** — optional architecture diagram (slide #1)
 6. **Git remote** — enable PR workflow and push branch
