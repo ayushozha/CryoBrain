@@ -23,7 +23,9 @@ __pycache__/
 .hud_eval.toml
 
 # Generated demo artifacts (not the cryobrain/artifacts package)
-/artifacts/
+/artifacts/*
+!/artifacts/baselines/
+!/artifacts/measured_*.json
 build/
 reports/
 obj_dir/

@@ -1,0 +1,19 @@
+{
+  "reward_source": "score_measured",
+  "with_memory": [
+    {
+      "step": 0,
+      "candidate_ler": 0.0,
+      "suppression": 1.0,
+      "rtl_hash": "239eb2ca81561e4df273f2c0fba404a23e02996440087465b0e807f8a735ae2d"
+    }
+  ],
+  "without_memory": [
+    {
+      "step": 0,
+      "candidate_ler": 0.0,
+      "suppression": 1.0,
+      "rtl_hash": "239eb2ca81561e4df273f2c0fba404a23e02996440087465b0e807f8a735ae2d"
+    }
+  ]
+}

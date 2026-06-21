@@ -6,10 +6,12 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.build_demo import build_bundle  # noqa: E402
+from scripts.build_demo import MissingMeasuredArtifactsError, build_bundle  # noqa: E402
 
 
 def _measured_climb_fixture() -> dict:
@@ -91,7 +93,7 @@ def test_build_demo_prefers_measured_artifacts(tmp_path: Path):
     assert bundle["pareto"]["points"][0]["ler"] == 0.018
 
 
-def test_build_demo_falls_back_to_proxy_with_label(tmp_path: Path):
+def test_build_demo_rejects_proxy_only_artifacts(tmp_path: Path):
     artifacts = tmp_path / "artifacts"
     _write_json(artifacts / "climb_chart_rl.json", _proxy_climb_fixture())
     _write_json(
@@ -108,16 +110,15 @@ def test_build_demo_falls_back_to_proxy_with_label(tmp_path: Path):
         ],
     )
 
-    bundle = build_bundle(artifacts)
-
-    assert bundle["data_era"] == "proxy"
-    assert bundle["sources"]["climb_era"] == "proxy"
-    assert bundle["sources"]["climb"] == "artifacts/climb_chart_rl.json"
-    assert bundle["climb"]["history"][1]["reward"] == 0.5
+    with pytest.raises(MissingMeasuredArtifactsError):
+        build_bundle(artifacts)
 
 
 def test_build_demo_includes_swarm_timeline_when_log_present(tmp_path: Path):
     artifacts = tmp_path / "artifacts"
+    _write_json(artifacts / "measured_climb.json", _measured_climb_fixture())
+    _write_json(artifacts / "measured_memory_ab.json", _measured_memory_fixture())
+    _write_json(artifacts / "measured_pareto.json", _measured_pareto_fixture())
     log = artifacts / "swarm" / "event_log.jsonl"
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(

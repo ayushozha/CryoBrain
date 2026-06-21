@@ -35,7 +35,7 @@ import random
 from pathlib import Path
 from typing import Any, Callable
 
-from cryobrain.design.config import mutate, preset_variants
+from cryobrain.design.config import GOLDEN_BASELINE, mutate, preset_variants
 from cryobrain.grader.score import score_measured
 from cryobrain.memory.store import MemoryStore
 from cryobrain.rl.proposal_loop import (
@@ -123,7 +123,7 @@ def run_measured_training(
     store = store if store is not None else MemoryStore()
 
     presets = preset_variants()
-    best_design = presets[0]
+    best_design = GOLDEN_BASELINE
     best_suppression = float("-inf")
     history: list[dict[str, Any]] = []
     steps_log: list[dict[str, Any]] = []
