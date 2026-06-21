@@ -1,8 +1,14 @@
+<p align="center">
+  <img src="docs/assets/cryobrain-banner.png" alt="CryoBrain — The AI hardware lab for quantum chip design" width="100%" />
+</p>
+
 # CryoBrain
 
 **The AI hardware lab for designing the full quantum chip, starting with the brain that keeps it alive.**
 
 [![Status](https://img.shields.io/badge/status-demo--ready-brightgreen)](#status-at-a-glance)
+[![Demo Video](https://img.shields.io/badge/demo-watch%20on%20YouTube-red?logo=youtube)](https://youtu.be/-cI-zxsLctQ)
+[![Live Demo](https://img.shields.io/badge/live%20app-GitHub%20Pages-0a84ff)](https://ayushozha.github.io/CryoBrain/)
 [![Spec](https://img.shields.io/badge/spec-v6.1-blue)](docs/specs/SPEC-v6.1-checkpointed.md)
 [![Python](https://img.shields.io/badge/python-3.11--3.12-blue)](pyproject.toml)
 [![React](https://img.shields.io/badge/react-vite%20%2B%20three.js-61dafb)](web/README.md)
@@ -20,6 +26,7 @@ The pitch is simple: **every quantum chip needs a brain. CryoBrain is the swarm 
 - [Evidence](#evidence)
 - [Architecture](#architecture)
 - [Demo](#demo)
+- [Demo Video](#demo-video)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
 - [Repository Map](#repository-map)
@@ -142,16 +149,28 @@ The full-chip design vision extends this same loop beyond the current decoder/FI
 
 ## Demo
 
+### Demo Video
+
+[![CryoBrain demo walkthrough](https://img.youtube.com/vi/-cI-zxsLctQ/maxresdefault.jpg)](https://youtu.be/-cI-zxsLctQ)
+
+**Watch the demo:** [https://youtu.be/-cI-zxsLctQ](https://youtu.be/-cI-zxsLctQ)
+
+The video walks through the CryoBrain pitch: the full-chip vision, measured decoder evidence, sponsor-backed marathon results, and the live React scrollytelling app.
+
+**Live app:** [https://ayushozha.github.io/CryoBrain/](https://ayushozha.github.io/CryoBrain/)
+
 There are two demo surfaces:
 
 | Surface | Purpose | Path |
 |---------|---------|------|
-| React/Three scrollytelling site | Sells the full-chip vision with a polished visual narrative bound to measured project data | `web/` |
+| React/Three scrollytelling site | Sells the full-chip vision with a polished visual narrative bound to measured project data | [Live](https://ayushozha.github.io/CryoBrain/) · `web/` |
 | Offline audit dashboard | Shows the raw measured loop: waveform, improvement tracks, memory A/B, Pareto, and swarm bus | `demo/index.html` |
 
 ### React/Three Vision Site
 
-Run the richer pitch experience:
+**Deployed:** [https://ayushozha.github.io/CryoBrain/](https://ayushozha.github.io/CryoBrain/)
+
+Run the richer pitch experience locally:
 
 ```powershell
 cd .\web
